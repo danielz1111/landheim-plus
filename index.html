@@ -12,8 +12,8 @@
       <div class="auth-card">
         <div class="brandline"><div class="logo">L+</div><div><h1>Landheim Plus</h1><p>Gemeinsam mehr erreichen.</p></div></div>
         <h2>Anmelden</h2>
-        <label>E-Mail</label>
-        <input id="email" type="email" autocomplete="username" placeholder="name@schule.de">
+        <label>E-Mail oder Benutzername</label>
+        <input id="email" autocomplete="username" placeholder="z. B. maximilian.holzhey">
         <label>Passwort</label>
         <input id="password" type="password" autocomplete="current-password">
         <button id="loginBtn" class="primary">Anmelden</button>
@@ -111,6 +111,14 @@
                 <p class="hint">Schüler/innen können damit selbst der ausgewählten Klasse beitreten.</p>
               </article>
               <article class="card">
+                <h3>Schüler/innen importieren</h3>
+                <p class="hint">Format pro Zeile: Nachname;Vorname;TT.MM.JJJJ. Das Geburtsdatum wird nur zum Erzeugen des einmaligen Startpassworts verwendet und nicht gespeichert.</p>
+                <textarea id="bulkImportInput" placeholder="Mustermann;Mia;01.02.2012"></textarea>
+                <button id="bulkImportBtn" class="primary">Konten anlegen & Klasse zuordnen</button>
+                <div id="bulkImportMsg" class="msg"></div>
+              </article>
+
+              <article class="card">
                 <h3>Klassensteuerung</h3>
                 <div class="buttonrow">
                   <button id="bonusBtn">+1 Klassenbonus</button>
@@ -136,6 +144,20 @@
           </section>
         </div>
       </main>
+    </section>
+
+    <section id="forcePasswordView" class="auth-wrap hidden">
+      <div class="auth-card">
+        <div class="brandline"><div class="logo">L+</div><div><h1>Landheim Plus</h1><p>Erste Anmeldung</p></div></div>
+        <h2>Eigenes Passwort festlegen</h2>
+        <p class="hint">Dein Startpasswort gilt nur für die erste Anmeldung.</p>
+        <label>Neues Passwort</label>
+        <input id="newPassword1" type="password" autocomplete="new-password" minlength="10">
+        <label>Neues Passwort wiederholen</label>
+        <input id="newPassword2" type="password" autocomplete="new-password" minlength="10">
+        <button id="changePasswordBtn" class="primary">Passwort speichern</button>
+        <div id="passwordMsg" class="msg"></div>
+      </div>
     </section>
   </div>
 

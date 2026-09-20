@@ -44,7 +44,8 @@ async function init(){
 }
 $("loginBtn").onclick=async()=>{
   showLoginMessage("");
-  const email=$("email").value.trim(), password=$("password").value;
+  const rawLogin=$("email").value.trim().toLowerCase(), password=$("password").value;
+  const email = rawLogin.includes("@") ? rawLogin : `${rawLogin}@students.landheim-plus.invalid`;
   const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
   if(error){showLoginMessage(error.message);return}
   await enterApp(data.user);
@@ -55,6 +56,13 @@ async function enterApp(user){
   const {data:p,error}=await supabaseClient.from("profiles").select("*").eq("id",user.id).single();
   if(error||!p){showLoginMessage("Profil konnte nicht geladen werden.");return}
   profile=p;
+  if(profile.role==="student" && profile.must_change_password){
+    $("loginView").classList.add("hidden");
+    $("shell").classList.add("hidden");
+    $("forcePasswordView").classList.remove("hidden");
+    return;
+  }
+  $("forcePasswordView").classList.add("hidden");
   $("loginView").classList.add("hidden");$("shell").classList.remove("hidden");
   $("welcomeName").textContent=`Hallo ${p.display_name||"!"}`;
   setRoleUI();
@@ -203,6 +211,74 @@ $("joinBtn").onclick=async()=>{
   $("joinMsg").textContent=error?error.message:"Klasse erfolgreich hinzugefügt.";
   if(!error){$("joinInput").value="";await loadClasses();showPage("dashboard")}
 };
+
+
+function normalizeUsernamePart(s){
+  return String(s||"").trim().toLowerCase()
+    .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9-]+/g,".")
+    .replace(/^\.+|\.+$/g,"")
+    .replace(/\.+/g,".");
+}
+function passwordFromBirthdate(d){
+  const m=String(d||"").trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? `${m[1]}${m[2]}${m[3]}` : null;
+}
+function parseBulkStudents(text){
+  const used=new Map();
+  const out=[];
+  const errors=[];
+  String(text||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean).forEach((line,i)=>{
+    const parts=line.split(";").map(x=>x.trim());
+    if(parts.length<3){errors.push(`Zeile ${i+1}: Formatfehler`);return}
+    const [last,first,birth]=parts;
+    const pw=passwordFromBirthdate(birth);
+    if(!pw){errors.push(`Zeile ${i+1}: Geburtsdatum ungültig`);return}
+    let base=`${normalizeUsernamePart(first)}.${normalizeUsernamePart(last)}`;
+    let username=base;
+    const n=(used.get(base)||0)+1; used.set(base,n);
+    if(n>1) username=`${base}${n}`;
+    out.push({display_name:`${first} ${last}`.trim(),username,initial_password:pw});
+  });
+  return {students:out,errors};
+}
+
+$("changePasswordBtn").onclick=async()=>{
+  $("passwordMsg").textContent="";
+  const p1=$("newPassword1").value, p2=$("newPassword2").value;
+  if(p1.length<10){$("passwordMsg").textContent="Bitte mindestens 10 Zeichen verwenden.";return}
+  if(p1!==p2){$("passwordMsg").textContent="Die Passwörter stimmen nicht überein.";return}
+  const {error}=await supabaseClient.auth.updateUser({password:p1});
+  if(error){$("passwordMsg").textContent=error.message;return}
+  const {error:rpcError}=await supabaseClient.rpc("complete_first_login");
+  if(rpcError){$("passwordMsg").textContent=rpcError.message;return}
+  $("forcePasswordView").classList.add("hidden");
+  const {data:{user}}=await supabaseClient.auth.getUser();
+  await enterApp(user);
+};
+
+$("bulkImportBtn").onclick=async()=>{
+  $("bulkImportMsg").textContent="";
+  if(!currentClassId){$("bulkImportMsg").textContent="Bitte zuerst eine Klasse auswählen.";return}
+  const parsed=parseBulkStudents($("bulkImportInput").value);
+  if(parsed.errors.length){$("bulkImportMsg").textContent=parsed.errors.join(" | ");return}
+  if(!parsed.students.length){$("bulkImportMsg").textContent="Keine Importdaten gefunden.";return}
+  $("bulkImportBtn").disabled=true;
+  $("bulkImportMsg").textContent=`${parsed.students.length} Konten werden angelegt …`;
+  const {data,error}=await supabaseClient.functions.invoke("bulk-create-students",{
+    body:{class_id:currentClassId,students:parsed.students}
+  });
+  $("bulkImportBtn").disabled=false;
+  if(error){$("bulkImportMsg").textContent=error.message;return}
+  const failed=(data?.results||[]).filter(x=>!x.ok);
+  $("bulkImportMsg").textContent=failed.length
+    ? `${data.created} angelegt, ${failed.length} Fehler: `+failed.map(x=>`${x.username}: ${x.error}`).join(" | ")
+    : `${data.created} Schülerkonten erfolgreich angelegt.`;
+  if(!failed.length)$("bulkImportInput").value="";
+  await loadCurrentClass();
+};
+
 
 document.querySelectorAll(".nav[data-target]").forEach(btn=>btn.onclick=()=>showPage(btn.dataset.target));
 init();
