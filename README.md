@@ -1,84 +1,82 @@
-# Landheim Plus – Version 3 (onlinefähig)
+# Landheim Plus 1.0
 
-Diese Version ist für **Supabase + Vercel** vorbereitet.
+Landheim Plus ist ein webbasiertes Klassen- und Fortschrittssystem für den Unterricht. Die produktive Version nutzt **Supabase** für Authentifizierung/Datenbank und **Vercel** für das Hosting.
 
-## Was funktioniert
-- E-Mail/Passwort-Login über Supabase Auth
-- Rollen: Lehrkraft / Schüler/in
-- Lehrkraft kann Klassen anlegen
-- jede Klasse erhält einen Beitrittscode
-- Schüler/innen können per Code beitreten
-- Lehrkraft vergibt individuelle Pluspunkte nach Kategorien
-- 10 individuelle Nettopunkte = 1 Klassenpunkt (serverseitig in PostgreSQL)
-- Klassenbonus, Serie, Challenge, Freischaltung
-- Schüler sehen nur ihre eigenen individuellen Punktedaten
-- gemeinsamer Klassenstand ist für Klassenmitglieder sichtbar
-- Row Level Security (RLS) schützt die Datenbank
+## Pädagogische Logik
 
-## 1. Supabase-Projekt anlegen
-1. https://supabase.com öffnen und ein neues Projekt anlegen.
-2. SQL Editor öffnen.
-3. `supabase.sql` vollständig ausführen.
-4. Unter Authentication -> Users zunächst Testkonten anlegen.
-5. Das Lehrerkonto nach der Kontoanlage im SQL Editor einmalig auf `teacher` setzen:
-
-```sql
-update public.profiles
-set role='teacher', display_name='Herr Zech'
-where id='<UUID DES LEHRERKONTOS>';
-```
-
-Alle neu angelegten Konten sind bewusst standardmäßig `student`.
-
-## 2. Konfiguration
-1. In Supabase unter Project Settings / API die **Project URL** und den **Publishable Key** kopieren.
-2. `config.js` öffnen.
-3. Platzhalter ersetzen:
-
-```js
-window.LANDHEIM_PLUS_CONFIG = {
-  SUPABASE_URL: "https://....supabase.co",
-  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_..."
-};
-```
-
-Der Publishable/Anon-Key ist für Browser-Apps vorgesehen. Die eigentliche Zugriffssicherheit liegt in RLS. Niemals den Service-Role-Key in die Webseite eintragen.
-
-## 3. Lokal testen
-Am zuverlässigsten über einen kleinen lokalen Webserver:
-
-```bash
-python -m http.server 8080
-```
-
-Dann im Browser:
-`http://localhost:8080`
-
-## 4. Vercel
-Den gesamten Ordner auf GitHub legen oder direkt als Projekt deployen. Für diese statische Version ist kein Build-Schritt nötig.
-
-## Datenschutz
-Vor echten Schülerdaten:
-- schulische Freigabe / Verantwortlichkeit klären
-- nur notwendige Daten verwenden
-- vorzugsweise Schul-E-Mail-Konten und sparsame Anzeigenamen
+- Zwei Doppelstunden pro Woche
+- maximal **2 individuelle Pluspunkte pro Schüler/in und Woche**
+- maximal **2 Klassenpunkte pro Woche**
+- individuelle Stufen:
+  - Bronze ab 4 Punkten
+  - Silber ab 10 Punkten
+  - Gold ab 20 Punkten **und** mindestens 3 aktiven Entwicklungsbereichen
+  - Platin als besondere Jahresauszeichnung, höchstens einmal pro Klasse/Schuljahr
+- Entwicklungsbereiche: Mitarbeit, Zuverlässigkeit, Teamwork, Fokus, Hilfsbereitschaft
 - keine öffentliche Rangliste
-- Lösch- und Schuljahreswechsel-Konzept festlegen
-- Auftragsverarbeitung / Hostingstandort nach den schulischen Vorgaben prüfen
+- Klassen-Season: 20 Punkte mit Freischaltungen bei 4 / 8 / 12 / 16 / 20
 
-## Dateien
-- `index.html` – Oberfläche
-- `styles.css` – Design
-- `app.js` – Supabase-Logik
-- `config.js` – deine lokale Konfiguration
-- `config.example.js` – Vorlage
-- `supabase.sql` – Datenbank, Trigger und RLS
+## Funktionen
 
-## Nächster Ausbau
-- Schülerimport
-- Jahres-/Klassenarchiv
-- Bronze/Silber/Gold/Platin sauber als individuelle Entwicklungsstufen
-- QR-Code für Beitritt
-- Live-Aktualisierung via Supabase Realtime
-- Belohnungskatalog / Mystery-Unlocks
-- Lehreraktivitätsverlauf und Korrekturfunktion
+### Lehrkraft
+- Klassen und Schüler/innen verwalten
+- Schülerimport mit Einmal-Passwort und Pflicht-Passwortwechsel
+- schnelle Punktevergabe am Handy
+- Wochenlimits werden serverseitig erzwungen
+- Klassenpunkte je Doppelstunde
+- Challenges
+- editierbarer Freischaltungskatalog inkl. Mystery Unlock
+- Verlauf mit dokumentierter Korrekturfunktion
+- Passwort-Reset / Schüler aus Klasse entfernen
+- Platin-Auszeichnung
+- Schuljahreswechsel mit Archiv und optionaler Übernahme der Schülerkonten
+- Smartboard-Link ohne Schülernamen
+
+### Schüler/in
+- eigener Punktestand
+- Bronze / Silber / Gold / Platin
+- fünf Entwicklungsbereiche und Abzeichen
+- eigene Punkthistorie
+- gemeinsamer Klassenfortschritt
+- Freischaltungen und Challenge
+- keine Punktestände anderer Schüler/innen
+
+### Smartboard
+Die URL `?display=<TOKEN>` zeigt nur:
+- Klassenfortschritt
+- Wochenstand
+- Challenge
+- Freischaltungen
+
+Es werden keine Schülernamen, Benutzernamen oder individuellen Punktestände ausgegeben.
+
+## Einmalige Migration auf 1.0
+
+Vor dem Merge der 1.0-Weboberfläche muss `supabase_final.sql` **einmal vollständig** im Supabase SQL Editor ausgeführt werden.
+
+Die Migration erhält bestehende Konten, Klassen, Mitgliedschaften und individuelle Punkte.
+
+## Sicherheit / Datenschutz
+
+- keine öffentliche Rangliste
+- Geburtsdaten werden nicht als Profilfeld gespeichert
+- Passwörter werden ausschließlich über Supabase Auth verarbeitet
+- Schüler sehen über RLS nur ihre eigenen individuellen Punktdaten
+- Klassenstände sind aggregiert
+- Admin-/Service-Schlüssel gehören ausschließlich in serverseitige Supabase Edge Functions
+- der Publishable Key in `config.js` ist für Browser-Anwendungen vorgesehen; die Zugriffskontrolle erfolgt über RLS/RPC
+
+Eine schulische Datenschutzprüfung sowie die formale Datenschutzerklärung des Verantwortlichen bleiben organisatorische Aufgaben der Schule.
+
+## Deployment
+
+- Repository: GitHub
+- Hosting: Vercel
+- Datenbank/Auth: Supabase
+- Änderungen an `main` werden von Vercel automatisch deployed.
+
+
+## Hinweis zur bestehenden Installation
+Die finale Migration berücksichtigt jetzt ausdrücklich die bereits installierte
+`get_my_classes()`-Funktion aus der bisherigen Version und ersetzt sie sicher.
+Bestehende Schülerkonten, Klassen und Punkte werden dabei nicht gelöscht.
