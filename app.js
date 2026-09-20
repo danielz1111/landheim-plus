@@ -75,11 +75,19 @@ async function loadClasses(){
   if(isTeacher()){
     q=await supabaseClient.from("classes").select("*").eq("teacher_id",profile.id).order("name");
   }else{
-    q=await supabaseClient.from("class_members").select("class_id, classes(*)").eq("student_user_id",profile.id);
+    q=await supabaseClient.rpc("get_my_classes");
   }
   if(q.error){console.error(q.error);return}
-  classes=isTeacher()?q.data:q.data.map(x=>x.classes).filter(Boolean);
+  classes=isTeacher()?q.data:(q.data||[]);
   $("classSelect").innerHTML=classes.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+
+  // Importierte Schüler sind bereits einer Klasse zugeordnet.
+  // "Klasse beitreten" erscheint nur, wenn noch keine Klassenzuordnung existiert.
+  if(!isTeacher()){
+    const joinNav=document.querySelector('.nav[data-target="join"]');
+    if(joinNav) joinNav.classList.toggle("hidden", classes.length>0);
+  }
+
   currentClassId=classes[0]?.id||null;
   await loadCurrentClass();
 }
