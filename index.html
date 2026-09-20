@@ -92,7 +92,12 @@
           </section>
 
           <section id="students" class="page hidden teacher-only">
-            <div class="headline"><div><h2>Schüler/innen</h2><p>Pluspunkte vergeben – ohne öffentliche Rangliste.</p></div></div>
+            <div class="headline">
+              <div><h2>Schüler/innen</h2><p>Pluspunkte vergeben – ohne öffentliche Rangliste.</p></div>
+              <div class="buttonrow">
+                <button id="exportUsernamesBtn">Benutzernamen exportieren</button>
+              </div>
+            </div>
             <div id="studentCards" class="student-grid"></div>
           </section>
 
@@ -160,6 +165,27 @@
       </div>
     </section>
   </div>
+
+
+    <div id="accountModal" class="modal-back hidden">
+      <div class="modal-card">
+        <h3 id="accountModalTitle">Schülerkonto</h3>
+        <p id="accountModalInfo" class="hint"></p>
+
+        <div id="resetPasswordBlock">
+          <label>Temporäres Passwort</label>
+          <input id="temporaryPassword" type="text" placeholder="z. B. 01012012">
+          <p class="hint">Es wird nicht in Landheim Plus gespeichert. Beim nächsten Login muss ein neues Passwort vergeben werden.</p>
+          <button id="confirmResetPasswordBtn" class="primary">Temporäres Passwort setzen</button>
+        </div>
+
+        <div class="modal-actions">
+          <button id="removeStudentBtn" class="danger-btn">Aus Klasse entfernen</button>
+          <button id="closeAccountModalBtn">Schließen</button>
+        </div>
+        <div id="accountModalMsg" class="msg"></div>
+      </div>
+    </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>

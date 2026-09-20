@@ -7,3 +7,11 @@
 @media(max-width:760px){.shell{grid-template-columns:1fr}.sidebar{position:static;height:auto}.sidebar .brandline{margin-bottom:10px}.sidebar .nav{width:auto;display:inline-block}.nav.bottom{position:static;width:auto}.topbar{align-items:flex-start;flex-direction:column}.content{padding:14px}.stats{grid-template-columns:1fr 1fr}.dashgrid{grid-template-columns:1fr}.dark{grid-column:auto}.student-grid,.manage-grid{grid-template-columns:1fr}.category-grid{grid-template-columns:1fr 1fr}.progress-visual{grid-template-columns:1fr}.tank{height:210px}.headline{display:block}.team-pill{margin-top:10px}}
 
 #forcePasswordView{position:fixed;inset:0;z-index:9999}.manage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:900px){.manage-grid{grid-template-columns:1fr}}
+
+.student-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.account-actions{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.account-actions button{font-size:12px;padding:7px 9px}
+.modal-back{position:fixed;inset:0;background:rgba(7,22,36,.48);display:grid;place-items:center;padding:20px;z-index:9998}
+.modal-card{width:min(520px,100%);background:white;border-radius:22px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
+.modal-card h3{margin-top:0}.modal-actions{display:flex;justify-content:space-between;gap:10px;margin-top:16px}
+.danger-btn{background:#fde8e8;color:#a63131}.modal-card .primary{width:100%}

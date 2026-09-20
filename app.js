@@ -104,7 +104,7 @@ async function loadCurrentClass(){
 
   if(isTeacher()){
     const {data:m,error:me}=await supabaseClient.from("class_members")
-      .select("student_user_id, profiles!class_members_student_user_id_fkey(display_name)")
+      .select("student_user_id, profiles!class_members_student_user_id_fkey(display_name, username)")
       .eq("class_id",currentClassId);
     if(me){console.error(me);members=[]} else members=m||[];
     await loadTeacherPointTotals();
@@ -149,13 +149,26 @@ function renderStudents(){
   const totals={}; myPoints.forEach(p=>totals[p.recipient_user_id]=(totals[p.recipient_user_id]||0)+Number(p.delta||0));
   $("studentCards").innerHTML=members.map(m=>{
     const name=m.profiles?.display_name||"Schüler/in";
+    const username=m.profiles?.username||"";
     return `<div class="student">
-      <div class="student-head"><div style="display:flex;gap:9px;align-items:center"><div class="avatar">${escapeHtml(name.slice(0,2).toUpperCase())}</div><div class="student-name">${escapeHtml(name)}</div></div></div>
+      <div class="student-head">
+        <div style="display:flex;gap:9px;align-items:center">
+          <div class="avatar">${escapeHtml(name.slice(0,2).toUpperCase())}</div>
+          <div>
+            <div class="student-name">${escapeHtml(name)}</div>
+            <div class="student-meta">${username ? "@" + escapeHtml(username) : "kein Benutzername"}</div>
+          </div>
+        </div>
+      </div>
       <div class="points">${Math.max(0,totals[m.student_user_id]||0)} <small>Pluspunkte</small></div>
-      <div class="award"><select>${cats.map(c=>`<option>${c}</option>`).join("")}</select><button data-user="${m.student_user_id}">+1</button></div>
+      <div class="award"><select>${cats.map(c=>`<option>${c}</option>`).join("")}</select><button data-user="${m.student_user_id}" class="awardBtn">+1</button></div>
+      <div class="account-actions">
+        <button class="accountBtn" data-user="${m.student_user_id}" data-name="${escapeHtml(name)}" data-username="${escapeHtml(username)}">🔐 Zugang</button>
+      </div>
     </div>`;
   }).join("") || `<div class="card">Noch keine Schüler/innen in dieser Klasse. Beitrittscode: <strong>${escapeHtml(classes.find(c=>c.id===currentClassId)?.join_code||"")}</strong></div>`;
-  $("studentCards").querySelectorAll("button[data-user]").forEach(btn=>btn.onclick=async()=>{
+
+  $("studentCards").querySelectorAll(".awardBtn[data-user]").forEach(btn=>btn.onclick=async()=>{
     const card=btn.closest(".student"), category=card.querySelector("select").value;
     btn.disabled=true;
     const {error}=await supabaseClient.from("point_events").insert({
@@ -164,6 +177,10 @@ function renderStudents(){
     btn.disabled=false;
     if(error){alert(error.message);return}
     await loadCurrentClass();
+  });
+
+  $("studentCards").querySelectorAll(".accountBtn").forEach(btn=>btn.onclick=()=>{
+    openAccountModal(btn.dataset.user,btn.dataset.name,btn.dataset.username);
   });
 }
 
@@ -279,6 +296,75 @@ $("bulkImportBtn").onclick=async()=>{
   await loadCurrentClass();
 };
 
+
+
+let accountStudentId=null;
+
+function openAccountModal(studentId,name,username){
+  accountStudentId=studentId;
+  $("accountModalTitle").textContent=name||"Schülerkonto";
+  $("accountModalInfo").textContent=username ? `Benutzername: ${username}` : "Kein Benutzername hinterlegt.";
+  $("temporaryPassword").value="";
+  $("accountModalMsg").textContent="";
+  $("accountModal").classList.remove("hidden");
+}
+
+$("closeAccountModalBtn").onclick=()=>{
+  $("accountModal").classList.add("hidden");
+  accountStudentId=null;
+};
+
+$("confirmResetPasswordBtn").onclick=async()=>{
+  if(!accountStudentId)return;
+  const pw=$("temporaryPassword").value.trim();
+  if(pw.length<8){$("accountModalMsg").textContent="Mindestens 8 Zeichen erforderlich.";return}
+  $("confirmResetPasswordBtn").disabled=true;
+  const {data,error}=await supabaseClient.functions.invoke("manage-student-account",{
+    body:{
+      action:"reset_password",
+      class_id:currentClassId,
+      student_user_id:accountStudentId,
+      temporary_password:pw
+    }
+  });
+  $("confirmResetPasswordBtn").disabled=false;
+  $("accountModalMsg").textContent=error ? error.message : (data?.message||"Passwort zurückgesetzt.");
+};
+
+$("removeStudentBtn").onclick=async()=>{
+  if(!accountStudentId)return;
+  if(!confirm("Schüler/in wirklich aus dieser Klasse entfernen? Das Benutzerkonto bleibt bestehen."))return;
+  $("removeStudentBtn").disabled=true;
+  const {data,error}=await supabaseClient.functions.invoke("manage-student-account",{
+    body:{
+      action:"remove_from_class",
+      class_id:currentClassId,
+      student_user_id:accountStudentId
+    }
+  });
+  $("removeStudentBtn").disabled=false;
+  if(error){$("accountModalMsg").textContent=error.message;return}
+  $("accountModal").classList.add("hidden");
+  accountStudentId=null;
+  await loadCurrentClass();
+};
+
+$("exportUsernamesBtn").onclick=()=>{
+  const c=classes.find(x=>x.id===currentClassId);
+  const rows=[["Name","Benutzername","Klasse"]];
+  members.forEach(m=>rows.push([
+    m.profiles?.display_name||"",
+    m.profiles?.username||"",
+    c?.name||""
+  ]));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
+  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`${(c?.name||"klasse").replace(/\s+/g,"_")}_Benutzernamen.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
 document.querySelectorAll(".nav[data-target]").forEach(btn=>btn.onclick=()=>showPage(btn.dataset.target));
 init();
