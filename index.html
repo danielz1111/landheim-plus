@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Landheim Plus</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <section id="loginView" class="auth-wrap">
+      <div class="auth-card">
+        <div class="brandline"><div class="logo">L+</div><div><h1>Landheim Plus</h1><p>Gemeinsam mehr erreichen.</p></div></div>
+        <h2>Anmelden</h2>
+        <label>E-Mail</label>
+        <input id="email" type="email" autocomplete="username" placeholder="name@schule.de">
+        <label>Passwort</label>
+        <input id="password" type="password" autocomplete="current-password">
+        <button id="loginBtn" class="primary">Anmelden</button>
+        <div id="loginMsg" class="msg"></div>
+        <p class="hint">Konten werden zunächst zentral angelegt. Die Webseite speichert kein Passwort selbst.</p>
+      </div>
+    </section>
+
+    <section id="shell" class="shell hidden">
+      <aside class="sidebar">
+        <div class="brandline small"><div class="logo">L+</div><div><h1>Landheim Plus</h1><p id="roleLabel"></p></div></div>
+        <button class="nav active" data-target="dashboard">🏠 Übersicht</button>
+        <button class="nav teacher-only" data-target="students">👥 Schüler/innen</button>
+        <button class="nav teacher-only" data-target="manage">⚙️ Verwaltung</button>
+        <button class="nav student-only" data-target="join">➕ Klasse beitreten</button>
+        <button id="logoutBtn" class="nav bottom">↪ Abmelden</button>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div><strong id="welcomeName">Willkommen</strong><span id="className"></span></div>
+          <select id="classSelect"></select>
+        </header>
+
+        <div class="content">
+          <section id="dashboard" class="page">
+            <div class="headline">
+              <div><h2 id="dashboardTitle">Klassenfortschritt</h2><p>Gemeinsamer Fortschritt – individuelle Entwicklung.</p></div>
+              <div class="team-pill">👥 Gemeinsam mehr erreichen</div>
+            </div>
+
+            <div id="noClass" class="card hidden">
+              <h3>Noch keine Klasse</h3>
+              <p id="noClassText"></p>
+            </div>
+
+            <div id="dashboardBody">
+              <div class="stats">
+                <div class="stat"><span>Klassenpunkte</span><b id="classPoints">0</b><small>gesamt</small></div>
+                <div class="stat teacher-only"><span>Individuelle Pluspunkte</span><b id="individualTotal">0</b><small>in der Klasse</small></div>
+                <div class="stat student-only"><span>Meine Pluspunkte</span><b id="myPoints">0</b><small>persönlich</small></div>
+                <div class="stat"><span>Serie</span><b id="streak">0</b><small>gute Stunden</small></div>
+                <div class="stat"><span>Level</span><b id="level">1</b><small id="levelName">Startklar</small></div>
+              </div>
+
+              <div class="dashgrid">
+                <article class="card dark">
+                  <div class="eyebrow">Klassenfortschritt</div>
+                  <div class="progress-visual">
+                    <div class="tank"><div id="tankFill" class="tank-fill"></div></div>
+                    <div><div class="big"><span id="bigPoints">0</span><small>/50</small></div><p>Klassenpunkte</p>
+                    <div class="soft">10 individuelle Pluspunkte = 1 Klassenpunkt</div></div>
+                  </div>
+                </article>
+
+                <article class="card">
+                  <div class="eyebrow">Aktuelle Challenge</div>
+                  <h3 id="challenge">–</h3>
+                  <div class="bar"><i id="challengeBar"></i></div>
+                  <p><span id="challengeNow">0</span> / <span id="challengeGoal">5</span> geschafft</p>
+                </article>
+
+                <article class="card mystery">
+                  <div class="eyebrow">Freischaltung</div>
+                  <h3 id="rewardTitle">Bei 40 Punkten</h3>
+                  <div class="gift">🔒🎁</div>
+                  <p id="rewardText">Noch nicht freigeschaltet.</p>
+                </article>
+              </div>
+
+              <article class="card student-only">
+                <div class="eyebrow">Meine Bereiche</div>
+                <div id="myCategories" class="category-grid"></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="students" class="page hidden teacher-only">
+            <div class="headline"><div><h2>Schüler/innen</h2><p>Pluspunkte vergeben – ohne öffentliche Rangliste.</p></div></div>
+            <div id="studentCards" class="student-grid"></div>
+          </section>
+
+          <section id="manage" class="page hidden teacher-only">
+            <div class="headline"><div><h2>Verwaltung</h2><p>Klasse, Challenge und gemeinsame Fortschritte steuern.</p></div></div>
+            <div class="manage-grid">
+              <article class="card">
+                <h3>Neue Klasse</h3>
+                <label>Klassenname</label><input id="newClassName" placeholder="z. B. Klasse 8b">
+                <button id="createClassBtn" class="primary">Klasse anlegen</button>
+                <div id="createMsg" class="msg"></div>
+              </article>
+              <article class="card">
+                <h3>Beitrittscode</h3>
+                <div id="joinCode" class="joincode">–</div>
+                <p class="hint">Schüler/innen können damit selbst der ausgewählten Klasse beitreten.</p>
+              </article>
+              <article class="card">
+                <h3>Klassensteuerung</h3>
+                <div class="buttonrow">
+                  <button id="bonusBtn">+1 Klassenbonus</button>
+                  <button id="streakBtn">+ gute Stunde</button>
+                  <button id="challengePlusBtn">+ Challenge</button>
+                </div>
+                <label>Challenge</label><textarea id="challengeInput"></textarea>
+                <label>Freischaltung</label><input id="rewardInput">
+                <button id="saveStateBtn" class="primary">Speichern</button>
+                <div id="stateMsg" class="msg"></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="join" class="page hidden student-only">
+            <div class="headline"><div><h2>Klasse beitreten</h2><p>Beitrittscode deiner Lehrkraft eingeben.</p></div></div>
+            <article class="card narrow">
+              <label>Beitrittscode</label>
+              <input id="joinInput" maxlength="12" placeholder="z. B. A8B4K2">
+              <button id="joinBtn" class="primary">Beitreten</button>
+              <div id="joinMsg" class="msg"></div>
+            </article>
+          </section>
+        </div>
+      </main>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
