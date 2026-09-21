@@ -58,7 +58,11 @@
         <div class="eyebrow">Aktuelle Challenge</div>
         <h2 id="publicChallenge">–</h2>
         <div class="bar"><i id="publicChallengeBar"></i></div>
-        <p><span id="publicChallengeNow">0</span> / <span id="publicChallengeGoal">2</span></p>
+        <p><span id="publicChallengeNow">0</span> / <span id="publicChallengeGoal">2</span></p><div class="bonus-hint">🎁 Geschafft = +3 Bonuspunkte</div>
+      </article>
+      <article class="public-card">
+        <div class="eyebrow">Unser Fokus</div>
+        <div id="publicClassFocus" class="focus-list public-focus-list"></div>
       </article>
       <article class="public-card rewards-span">
         <div class="eyebrow">Freischaltungen</div>
@@ -73,7 +77,9 @@
       <div class="brandline small"><div class="logo">L+</div><div><h1>Landheim Plus</h1><p id="roleLabel"></p></div></div>
       <button class="nav active" data-target="dashboard">🏠 Übersicht</button>
       <button class="nav teacher-only" data-target="students">👥 Schüler/innen</button>
-      <button class="nav" data-target="rewards">🎁 Freischaltungen</button>
+      <button class="nav teacher-only" data-target="goals">🎯 Ziele & Fokus</button>
+      <button class="nav" data-target="shop">🛍️ Shop</button>
+      <button class="nav" data-target="rewards">🎁 Klassen-Freischaltungen</button>
       <button class="nav" data-target="history">🕘 Verlauf</button>
       <button class="nav teacher-only" data-target="manage">⚙️ Verwaltung</button>
       <button class="nav teacher-only" data-target="archive">🗄️ Archiv</button>
@@ -96,7 +102,8 @@
               <div class="stat"><span>Season</span><b id="seasonNumber">1</b><small>gemeinsame Runde</small></div>
               <div class="stat"><span>Klassenpunkte</span><b id="classPoints">0</b><small>von 20</small></div>
               <div class="stat teacher-only"><span>Individuelle Punkte</span><b id="individualTotal">0</b><small>gesamt</small></div>
-              <div class="stat student-only"><span>Meine Punkte</span><b id="myPoints">0</b><small>persönlich</small></div>
+              <div class="stat student-only"><span>Meine Punkte</span><b id="myPoints">0</b><small>Entwicklung · dauerhaft</small></div>
+              <div class="stat student-only"><span>Bonusguthaben</span><b id="myBonusBalance">0</b><small>im Shop einlösbar</small></div>
               <div class="stat"><span>Diese Woche</span><b id="weekClassPoints">0/2</b><small>Klassenpunkte</small></div>
             </div>
             <div class="dashgrid">
@@ -110,10 +117,12 @@
               </article>
               <article class="card week-card"><div class="eyebrow">Diese Woche</div><h3>Zwei Doppelstunden – zwei Chancen</h3><div class="lesson-slots"><div id="lessonSlot1" class="lesson-slot"><b>○</b><span>Doppelstunde 1</span></div><div id="lessonSlot2" class="lesson-slot"><b>○</b><span>Doppelstunde 2</span></div></div><button id="awardClassPointBtn" class="primary teacher-only">+ Klassenpunkt</button><div id="classPointMsg" class="msg"></div></article>
               <article class="card mystery"><div class="eyebrow">Nächste Freischaltung</div><h3 id="rewardTitle">Bei 4 Punkten</h3><div class="gift" id="rewardIcon">🔒🎁</div><p id="rewardText">Der erste Unlock wartet.</p></article>
-              <article class="card challenge"><div class="eyebrow">Aktuelle Challenge</div><h3 id="challenge">–</h3><div class="bar"><i id="challengeBar"></i></div><p><span id="challengeNow">0</span> / <span id="challengeGoal">2</span> Doppelstunden geschafft</p></article>
+              <article class="card challenge"><div class="eyebrow">Aktuelle Challenge</div><h3 id="challenge">–</h3><div class="bar"><i id="challengeBar"></i></div><p><span id="challengeNow">0</span> / <span id="challengeGoal">2</span> Doppelstunden geschafft</p><div class="bonus-hint">🎁 Wochenchallenge geschafft: +3 Bonuspunkte für jede/n + 3 Gemeinschaftspunkte</div></article>
               <article class="card"><div class="eyebrow">Serie</div><h3><span id="streak">0</span> gute Doppelstunden</h3><div id="streakFlames" class="streak-flames">○○○○○</div><p class="hint">Bereits verdiente Punkte gehen nicht verloren.</p></article>
+              <article class="card class-focus-card"><div class="eyebrow">Unser Klassenfokus</div><h3>Woran wir gemeinsam arbeiten</h3><div id="classFocusList" class="focus-list"></div><button id="editClassFocusBtn" class="teacher-only focus-edit-btn">🎯 Klassenfokus bearbeiten</button></article>
             </div>
             <article class="card student-only personal-progress-card"><div class="personal-tier-head"><div><div class="eyebrow">Mein Fortschritt</div><h2 id="myTierTitle">Start</h2><p id="myTierHint"></p></div><div id="myTierMedal" class="tier-medal">○</div></div><div class="bar bigbar"><i id="myTierBar"></i></div><div id="myTierMeta" class="tier-meta"></div></article>
+            <article class="card student-only personal-focus-card"><div class="eyebrow">Meine aktuellen Ziele</div><h3>Darauf achte ich besonders</h3><div id="myFocusGoals" class="focus-list personal-focus-list"></div><p class="hint">Deine individuellen Ziele sind nur für dich und deine Lehrkraft sichtbar.</p></article>
             <article class="card student-only"><div class="eyebrow">Meine Stärken</div><h3>Fünf Entwicklungsbereiche</h3><div id="myCategories" class="category-grid"></div><div id="myBadges" class="badge-row"></div></article>
           </div>
         </section>
@@ -122,6 +131,65 @@
           <div class="headline"><div><h2>Schüler/innen</h2><p>Schnelle Punktevergabe – maximal 2 individuelle Punkte pro Woche.</p></div><div class="buttonrow"><input id="studentSearch" class="searchbox" placeholder="🔎 Schüler/in suchen"><button id="exportUsernamesBtn">Benutzernamen exportieren</button></div></div>
           <div id="studentCards" class="student-grid"></div>
           <div class="mobile-classbar"><span id="mobileWeekStatus">Klasse 0/2</span><button id="mobileClassPointBtn">+ Klassenpunkt</button></div>
+        </section>
+
+
+        <section id="goals" class="page hidden teacher-only">
+          <div class="headline">
+            <div><h2>Ziele & Fokus</h2><p>Gemeinsame Klassenziele und individuelle Entwicklungsziele festlegen.</p></div>
+          </div>
+
+          <article class="card goal-class-panel">
+            <div class="goal-panel-head">
+              <div>
+                <div class="eyebrow">Klassenfokus</div>
+                <h3>Woran arbeitet die ganze Klasse?</h3>
+                <p class="hint">Bis zu drei längerfristige Schwerpunkte. Die Wochen-Challenge bleibt davon getrennt.</p>
+              </div>
+              <button id="editClassFocusPageBtn">🎯 Bearbeiten</button>
+            </div>
+            <div id="classFocusManageList" class="focus-list"></div>
+          </article>
+
+          <div class="headline subheadline">
+            <div><h3>Individuelle Ziele</h3><p>Bis zu drei Ziele pro Schüler/in. Diese sieht nur die betreffende Person.</p></div>
+            <input id="goalStudentSearch" class="searchbox" placeholder="🔎 Schüler/in suchen">
+          </div>
+          <div id="goalStudentGrid" class="goal-student-grid"></div>
+        </section>
+
+
+        <section id="shop" class="page hidden">
+          <div class="headline shop-headline">
+            <div>
+              <h2>Belohnungs-Shop</h2>
+              <p>Entwicklungspunkte bleiben erhalten. Nur Bonusguthaben wird beim Einlösen verbraucht.</p>
+            </div>
+            <div class="shop-wallets">
+              <div class="wallet student-only"><span>Mein Bonusguthaben</span><b id="shopPersonalBalance">0</b></div>
+              <div class="wallet"><span>Gemeinschaftsguthaben</span><b id="shopClassBalance">0</b></div>
+            </div>
+          </div>
+
+          <div class="shop-explain">
+            <div>🎯 <strong>Individuelles Ziel erreicht:</strong> +3 Bonuspunkte</div>
+            <div>🏆 <strong>Wochenchallenge geschafft:</strong> +3 Bonuspunkte für jede/n und +3 Gemeinschaftsguthaben</div>
+            <div>✅ <strong>Einlösung:</strong> erst nach Bestätigung durch die Lehrkraft</div>
+          </div>
+
+          <div class="shop-tabs">
+            <button id="shopPersonalTab" class="shop-tab active">👤 Persönlicher Shop</button>
+            <button id="shopClassTab" class="shop-tab">👥 Klassen-Shop</button>
+          </div>
+
+          <div id="shopItemGrid" class="shop-grid"></div>
+
+          <article class="card shop-requests-card">
+            <div class="headline compact">
+              <div><h3 id="shopRequestTitle">Meine Anträge</h3><p id="shopRequestSubtitle" class="hint">Beantragte Belohnungen werden erst nach Lehrkraftfreigabe abgebucht.</p></div>
+            </div>
+            <div id="shopRequestList" class="shop-request-list"></div>
+          </article>
         </section>
 
         <section id="rewards" class="page hidden"><div class="headline"><div><h2>Freischaltungen</h2><p>Fünf Etappen pro Season – sichtbar, motivierend und überschaubar.</p></div></div><div id="rewardGrid" class="reward-grid"></div></section>
@@ -149,6 +217,48 @@
   </section>
 
   <div id="accountModal" class="modal-back hidden"><div class="modal-card"><h3 id="accountModalTitle">Schülerkonto</h3><p id="accountModalInfo" class="hint"></p><label>Temporäres Passwort</label><input id="temporaryPassword" type="text" placeholder="mindestens 8 Zeichen"><p class="hint">Beim nächsten Login muss wieder ein eigenes Passwort vergeben werden.</p><button id="confirmResetPasswordBtn" class="primary">Temporäres Passwort setzen</button><div class="modal-actions"><button id="removeStudentBtn" class="danger-btn">Aus Klasse entfernen</button><button id="closeAccountModalBtn">Schließen</button></div><div id="accountModalMsg" class="msg"></div></div></div>
+
+
+  <div id="goalModal" class="modal-back hidden">
+    <div class="modal-card goal-modal-card">
+      <div class="goal-modal-head">
+        <div>
+          <div class="eyebrow">Pädagogischer Fokus</div>
+          <h3 id="goalModalTitle">Ziele festlegen</h3>
+          <p id="goalModalInfo" class="hint"></p>
+        </div>
+        <button id="closeGoalModalBtn" class="icon-close">✕</button>
+      </div>
+      <p class="hint">Wähle bis zu drei Ziele. Du kannst Vorschläge übernehmen oder eigene Formulierungen schreiben.</p>
+      <div id="goalEditorRows"></div>
+      <div class="goal-suggestions-block">
+        <div class="eyebrow">Schnellauswahl</div>
+        <div id="goalSuggestionChips" class="goal-suggestion-chips"></div>
+      </div>
+      <button id="saveGoalsBtn" class="primary">Ziele speichern</button>
+      <div id="goalModalMsg" class="msg"></div>
+    </div>
+  </div>
+
+
+  <div id="shopModal" class="modal-back hidden">
+    <div class="modal-card shop-modal-card">
+      <div class="goal-modal-head">
+        <div>
+          <div class="eyebrow">Belohnung beantragen</div>
+          <h3 id="shopModalTitle">Belohnung</h3>
+          <p id="shopModalInfo" class="hint"></p>
+        </div>
+        <button id="closeShopModalBtn" class="icon-close">✕</button>
+      </div>
+      <div id="shopGroupBlock" class="hidden">
+        <p class="hint">Gold-Belohnungen können von bis zu drei Gold-Schüler/innen gemeinsam bezahlt werden. Wähle höchstens zwei weitere Personen aus.</p>
+        <div id="shopGroupOptions" class="shop-group-options"></div>
+      </div>
+      <button id="submitShopRequestBtn" class="primary">Antrag senden</button>
+      <div id="shopModalMsg" class="msg"></div>
+    </div>
+  </div>
 
   <div id="rewardModal" class="modal-back hidden"><div class="modal-card"><h3>Freischaltung bearbeiten</h3><input id="rewardEditId" type="hidden"><label>Emoji</label><input id="rewardEditEmoji" maxlength="8"><label>Titel</label><input id="rewardEditLabel"><label>Beschreibung</label><textarea id="rewardEditDescription"></textarea><label class="checkline"><input id="rewardEditMystery" type="checkbox"> Bis zur Freischaltung geheim halten</label><button id="saveRewardBtn" class="primary">Speichern</button><div class="modal-actions"><span></span><button id="closeRewardModalBtn">Schließen</button></div><div id="rewardEditMsg" class="msg"></div></div></div>
 </div>

@@ -1,11 +1,36 @@
 const cfg = window.LANDHEIM_PLUS_CONFIG || {};
 const configured = cfg.SUPABASE_URL && !cfg.SUPABASE_URL.startsWith("DEINE_") && cfg.SUPABASE_PUBLISHABLE_KEY && !cfg.SUPABASE_PUBLISHABLE_KEY.startsWith("DEIN_");
 let supabaseClient=null, profile=null, classes=[], archivedClasses=[], currentClassId=null, currentState=null;
-let members=[], pointEvents=[], classEvents=[], rewards=[], platinumAwards=[];
-let accountStudentId=null, historyMode="all";
+let members=[], pointEvents=[], classEvents=[], rewards=[], platinumAwards=[], focusGoals=[], shopState={personal_balance:0,class_balance:0,tier_rank:0,items:[],requests:[]}, shopClassmates=[];
+let accountStudentId=null, historyMode="all", goalEditorStudentId=null, shopScope="personal", shopModalItemId=null;
 const $=id=>document.getElementById(id);
 const cats=["Mitarbeit","Zuverlässigkeit","Teamwork","Fokus","Hilfsbereitschaft"];
-const catIcons={Mitarbeit:"💬",Zuverlässigkeit:"✓",Teamwork:"🤝",Fokus:"🎯",Hilfsbereitschaft:"♥"};
+const catIcons={Mitarbeit:"💬",Zuverlässigkeit:"✓",Teamwork:"🤝",Fokus:"🎯",Hilfsbereitschaft:"♥",Klasse:"👥"};
+const classGoalPresets=[
+  ["Klasse","Wir sind innerhalb von zwei Minuten arbeitsbereit."],
+  ["Fokus","Wir arbeiten in Arbeitsphasen ruhig und konzentriert."],
+  ["Zuverlässigkeit","Wir haben unser benötigtes Material vollständig dabei."],
+  ["Teamwork","Wir arbeiten in Gruppen konstruktiv zusammen."],
+  ["Hilfsbereitschaft","Wir gehen respektvoll und unterstützend miteinander um."],
+  ["Mitarbeit","Wir beteiligen uns aktiv und lassen einander ausreden."],
+  ["Klasse","Wir beenden die Stunde gemeinsam ordentlich und vorbereitet."]
+];
+const studentGoalPresets=[
+  ["Mitarbeit","Ich beteilige mich regelmäßig mit passenden Beiträgen."],
+  ["Mitarbeit","Ich frage nach, wenn etwas unklar ist."],
+  ["Fokus","Ich beginne zügig mit der Arbeit."],
+  ["Fokus","Ich bleibe in Arbeitsphasen bei der Aufgabe."],
+  ["Fokus","Ich lasse mich weniger ablenken."],
+  ["Zuverlässigkeit","Ich habe mein Material vollständig dabei."],
+  ["Zuverlässigkeit","Ich erledige Arbeitsaufträge vollständig."],
+  ["Zuverlässigkeit","Ich halte Absprachen und Termine ein."],
+  ["Teamwork","Ich höre anderen aufmerksam zu."],
+  ["Teamwork","Ich arbeite konstruktiv mit anderen zusammen."],
+  ["Teamwork","Ich übernehme Verantwortung in der Gruppe."],
+  ["Hilfsbereitschaft","Ich unterstütze andere, ohne ihnen die Arbeit abzunehmen."],
+  ["Hilfsbereitschaft","Ich gehe respektvoll mit anderen um."],
+  ["Hilfsbereitschaft","Ich trage zu einer guten Arbeitsatmosphäre bei."]
+];
 const milestoneMeta={4:["⚡","Erster Unlock"],8:["🎁","Mystery"],12:["🎵","Team-Bonus"],16:["🗳️","Klassen-Voting"],20:["🏆","Season geschafft"]};
 
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
@@ -16,6 +41,14 @@ function isThisWeek(ts){return ts&&new Date(ts)>=weekStart()}
 function currentSchoolYear(){const d=new Date();let y=d.getFullYear();if(d.getMonth()<7)y--;return `${y}/${String(y+1).slice(-2)}`}
 function showMsg(id,msg,ok=false){const el=$(id);if(!el)return;el.textContent=msg||"";el.classList.toggle("ok",!!ok)}
 function activeClass(){return classes.find(c=>c.id===currentClassId)}
+function classFocusGoals(){return focusGoals.filter(g=>g.is_active&&g.student_user_id==null)}
+function individualFocusGoals(studentId){return focusGoals.filter(g=>g.is_active&&g.student_user_id===studentId)}
+function focusIcon(category){return catIcons[category]||"🎯"}
+function tierName(rank){return ["Start","Bronze","Silber","Gold","Platin"][Number(rank)||0]||"Start"}
+function renderFocusList(goals,emptyText="Noch kein Fokus festgelegt."){
+  if(!goals?.length)return `<div class="focus-empty">${escapeHtml(emptyText)}</div>`;
+  return goals.map(g=>`<div class="focus-item"><div class="focus-icon">${focusIcon(g.category)}</div><div><strong>${escapeHtml(g.title)}</strong><small>${escapeHtml(g.category||"Ziel")}</small></div></div>`).join("");
+}
 function classPoints(){return Math.max(0,sum(classEvents))}
 function weekClassPoints(){return Math.max(0,sum(classEvents.filter(e=>isThisWeek(e.created_at))))}
 function studentEvents(id){return pointEvents.filter(e=>e.recipient_user_id===id)}
@@ -25,7 +58,7 @@ function platinumFor(id){return platinumAwards.some(x=>x.student_user_id===id&&x
 function tierFor(events,platinum=false){const points=Math.max(0,sum(events)),counts=categoryCounts(events),breadth=Object.values(counts).filter(v=>v>0).length;if(platinum)return{key:"platinum",name:"Platin",icon:"💎",points,breadth,next:null};if(points>=20&&breadth>=3)return{key:"gold",name:"Gold",icon:"🥇",points,breadth,next:null};if(points>=10)return{key:"silver",name:"Silber",icon:"🥈",points,breadth,next:20};if(points>=4)return{key:"bronze",name:"Bronze",icon:"🥉",points,breadth,next:10};return{key:"start",name:"Start",icon:"○",points,breadth,next:4}}
 function tierHint(t){if(t.points>=20&&t.breadth<3)return `20 Punkte erreicht – für Gold noch ${3-t.breadth} weitere Bereiche nötig.`;if(t.next)return `Noch ${Math.max(0,t.next-t.points)} Punkte bis ${t.next===4?"Bronze":t.next===10?"Silber":"Gold"}.`;return t.key==="gold"?"Gold erreicht. Platin bleibt eine besondere Jahresauszeichnung.":"Besondere Jahresauszeichnung."}
 function setRoleUI(){document.querySelectorAll(".teacher-only").forEach(el=>el.classList.toggle("hidden",!isTeacher()));document.querySelectorAll(".student-only").forEach(el=>el.classList.toggle("hidden",isTeacher()));$("roleLabel").textContent=isTeacher()?"Lehrkraft":"Schüler/in"}
-function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));$(id)?.classList.remove("hidden");document.querySelectorAll(".nav[data-target]").forEach(b=>b.classList.toggle("active",b.dataset.target===id));if(id==="history")renderHistory();if(id==="archive")renderArchive();if(id==="rewards")renderRewards()}
+function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));$(id)?.classList.remove("hidden");document.querySelectorAll(".nav[data-target]").forEach(b=>b.classList.toggle("active",b.dataset.target===id));if(id==="history")renderHistory();if(id==="archive")renderArchive();if(id==="rewards")renderRewards();if(id==="goals")renderGoalsPage();if(id==="shop")renderShop()}
 
 async function init(){
   if(!configured){$("loginBtn").disabled=true;showMsg("loginMsg","Supabase-Konfiguration fehlt.");return}
@@ -47,6 +80,7 @@ async function loadPublicDisplay(token){
   renderMilestonesInto($("publicMilestones"),p,true);
   setLessonSlot($("publicLesson1"),wp>=1);setLessonSlot($("publicLesson2"),wp>=2);
   $("publicChallenge").textContent=data.challenge_text||"Noch keine Challenge";$("publicChallengeNow").textContent=data.challenge_current||0;$("publicChallengeGoal").textContent=data.challenge_goal||2;$("publicChallengeBar").style.width=Math.min(100,Number(data.challenge_current||0)/Number(data.challenge_goal||2)*100)+"%";
+  $("publicClassFocus").innerHTML=renderFocusList(data.class_focus||[],"Noch kein Klassenfokus festgelegt.");
   $("publicRewards").innerHTML=(data.rewards||[]).map(r=>`<div class="public-reward ${r.unlocked?"open":""}"><b>${escapeHtml(r.emoji||"🎁")}</b><strong>${r.milestone} Punkte</strong><div>${escapeHtml(r.label||"Mystery Unlock")}</div></div>`).join("");
   setInterval(async()=>{const {data:d}=await supabaseClient.rpc("get_public_class_display",{p_token:token});if(d){history.replaceState(null,"",location.href);location.reload()}},60000);
 }
@@ -82,12 +116,17 @@ async function loadCurrentClass(){
   $("noClass").classList.add("hidden");$("dashboardBody").classList.remove("hidden");const c=activeClass();$("className").textContent=c?.name||"";$("classSelect").value=currentClassId;
   const {data:state,error:se}=await supabaseClient.from("class_state").select("*").eq("class_id",currentClassId).single();if(se){alert("Bitte zuerst die finale Supabase-Migration ausführen.\n"+se.message);return}currentState=state;
   const start=currentState.season_started_at||"1970-01-01T00:00:00Z";
-  const [ce,rw,pa]=await Promise.all([
+  const [ce,rw,pa,fg,ss,sc]=await Promise.all([
     supabaseClient.from("class_point_events").select("*").eq("class_id",currentClassId).gte("created_at",start).order("created_at",{ascending:false}),
     supabaseClient.rpc("get_class_rewards",{p_class:currentClassId}),
-    supabaseClient.from("platinum_awards").select("*").eq("class_id",currentClassId)
+    supabaseClient.from("platinum_awards").select("*").eq("class_id",currentClassId),
+    supabaseClient.from("focus_goals").select("id,class_id,student_user_id,category,title,is_active,completed_at,created_at").eq("class_id",currentClassId).eq("is_active",true).order("id"),
+    supabaseClient.rpc("get_shop_state",{p_class:currentClassId}),
+    supabaseClient.rpc("get_shop_classmates",{p_class:currentClassId})
   ]);
-  classEvents=ce.error?[]:(ce.data||[]);rewards=rw.error?[]:(rw.data||[]);platinumAwards=pa.error?[]:(pa.data||[]);
+  classEvents=ce.error?[]:(ce.data||[]);rewards=rw.error?[]:(rw.data||[]);platinumAwards=pa.error?[]:(pa.data||[]);focusGoals=fg.error?[]:(fg.data||[]);
+  shopState=ss.error?{personal_balance:0,class_balance:0,tier_rank:0,items:[],requests:[]}:(ss.data||{personal_balance:0,class_balance:0,tier_rank:0,items:[],requests:[]});
+  shopClassmates=sc.error?[]:(sc.data||[]);
   if(isTeacher()){
     const [m,pe]=await Promise.all([
       supabaseClient.from("class_members").select("student_user_id, profiles!class_members_student_user_id_fkey(display_name, username)").eq("class_id",currentClassId),
@@ -96,7 +135,7 @@ async function loadCurrentClass(){
   }else{
     const {data:pe,error}=await supabaseClient.from("point_events").select("id,recipient_user_id,delta,category,note,reverses_event_id,created_at").eq("class_id",currentClassId).eq("recipient_user_id",profile.id).order("created_at",{ascending:false});pointEvents=error?[]:(pe||[]);members=[];
   }
-  renderDashboard();if(isTeacher())renderStudents();renderRewards();renderManage();renderHistory();renderArchive();
+  renderDashboard();if(isTeacher()){renderStudents();renderGoalsPage()}renderShop();renderRewards();renderManage();renderHistory();renderArchive();
 }
 
 function renderMilestonesInto(el,p,publicMode=false){el.innerHTML=[4,8,12,16,20].map(at=>{const [icon,label]=milestoneMeta[at],done=p>=at,next=!done&&[4,8,12,16,20].find(x=>p<x)===at;return `<div class="milestone-node ${done?"done":""} ${next?"next":""}"><b>${icon} ${at}</b>${label}</div>`}).join("")}
@@ -108,7 +147,8 @@ function renderDashboard(){
   $("challenge").textContent=currentState?.challenge_text||"Noch keine Challenge";$("challengeNow").textContent=currentState?.challenge_current||0;$("challengeGoal").textContent=currentState?.challenge_goal||2;$("challengeBar").style.width=Math.min(100,Number(currentState?.challenge_current||0)/Number(currentState?.challenge_goal||2)*100)+"%";
   $("streak").textContent=currentState?.streak||0;$("streakFlames").textContent="🔥".repeat(Math.min(5,currentState?.streak||0))+"○".repeat(Math.max(0,5-(currentState?.streak||0)));
   const next=rewards.find(r=>!r.unlocked);if(next){$("rewardTitle").textContent=`Bei ${next.milestone} Punkten`;$("rewardIcon").textContent=next.is_mystery?"🔒🎁":(next.emoji||"🎁");$("rewardText").textContent=`${next.label} · noch ${Math.max(0,next.milestone-cp)} Punkt${next.milestone-cp===1?"":"e"}`;}else{$("rewardTitle").textContent="Season geschafft!";$("rewardIcon").textContent="🏆✨";$("rewardText").textContent="Alle Freischaltungen erreicht."}
-  if(isTeacher())$("individualTotal").textContent=Math.max(0,sum(pointEvents));else{const mine=Math.max(0,sum(pointEvents));$("myPoints").textContent=mine;renderPersonalDashboard()}
+  $("classFocusList").innerHTML=renderFocusList(classFocusGoals(),"Noch kein Klassenfokus festgelegt.");
+  if(isTeacher())$("individualTotal").textContent=Math.max(0,sum(pointEvents));else{const mine=Math.max(0,sum(pointEvents));$("myPoints").textContent=mine;$("myBonusBalance").textContent=shopState.personal_balance||0;renderPersonalDashboard()}
 }
 
 function renderPersonalDashboard(){
@@ -116,16 +156,192 @@ function renderPersonalDashboard(){
   let pct=100;if(tier.key==="start")pct=tier.points/4*100;else if(tier.key==="bronze")pct=(tier.points-4)/6*100;else if(tier.key==="silver")pct=(tier.points-10)/10*100;$("myTierBar").style.width=Math.max(0,Math.min(100,pct))+"%";$("myTierMeta").innerHTML=`<span><strong>${tier.points}</strong> Pluspunkte</span><span><strong>${tier.breadth}/5</strong> Bereiche</span><span>Diese Woche <strong>${weekly}/2</strong></span>`;
   $("myCategories").innerHTML=cats.map(c=>`<div class="category"><span>${catIcons[c]} ${c}</span><b>${counts[c]||0}</b><div class="mini"><i style="width:${Math.min(100,(counts[c]||0)/5*100)}%"></i></div></div>`).join("");
   const badgeDefs=[["Teamplayer","Teamwork"],["Fokus-Profi","Fokus"],["Verlässlich","Zuverlässigkeit"],["Unterstützer","Hilfsbereitschaft"],["Aktiv dabei","Mitarbeit"]];const badges=badgeDefs.map(([n,c])=>`<span class="skill-badge ${(counts[c]||0)>=3?"earned":""}">${(counts[c]||0)>=3?"✓ ":""}${n}</span>`);if(Object.values(counts).every(v=>v>0))badges.push('<span class="skill-badge earned">★ Allrounder</span>');$("myBadges").innerHTML=badges.join("");
+  $("myFocusGoals").innerHTML=renderFocusList(individualFocusGoals(profile.id),"Für dich ist aktuell kein individuelles Ziel festgelegt.");
 }
 
 function renderStudents(){
   const query=($("studentSearch")?.value||"").trim().toLowerCase();const reversed=new Set(pointEvents.filter(e=>e.reverses_event_id).map(e=>e.reverses_event_id));const anyPlatinumThisYear=platinumAwards.some(a=>a.school_year===currentSchoolYear());
-  $("studentCards").innerHTML=members.filter(m=>(m.profiles?.display_name||"").toLowerCase().includes(query)).map(m=>{const ev=studentEvents(m.student_user_id),plat=platinumFor(m.student_user_id),tier=tierFor(ev,plat),name=m.profiles?.display_name||"Schüler/in",username=m.profiles?.username||"",weekly=Math.max(0,sum(ev.filter(e=>isThisWeek(e.created_at)))),eligible=tier.key==="gold"&&!plat&&!anyPlatinumThisYear;return `<div class="student"><div class="student-head"><div style="display:flex;gap:9px;align-items:center"><div class="avatar">${escapeHtml(name.slice(0,2).toUpperCase())}</div><div><div class="student-name">${escapeHtml(name)}</div><div class="student-meta">${username?"@"+escapeHtml(username):"kein Benutzername"}</div></div></div><span class="tier-chip ${tier.key}">${tier.icon} ${tier.name}</span></div><div class="points-row"><div class="points">${tier.points} <small>Pluspunkte</small></div><div class="week-chip">Woche ${weekly}/2</div></div><div class="quick-awards">${cats.map(c=>`<button class="quickBtn" data-user="${m.student_user_id}" data-cat="${c}" ${weekly>=2?"disabled":""} title="${c}">${catIcons[c]}<br>${c}</button>`).join("")}</div><div class="account-actions"><button class="accountBtn" data-user="${m.student_user_id}" data-name="${escapeHtml(name)}" data-username="${escapeHtml(username)}">🔐 Zugang</button>${eligible?`<button class="platinumBtn" data-platinum="${m.student_user_id}" data-name="${escapeHtml(name)}">💎 Platin</button>`:""}</div></div>`}).join("")||'<div class="card">Keine passenden Schüler/innen.</div>';
-  document.querySelectorAll(".quickBtn").forEach(btn=>btn.onclick=()=>awardIndividual(btn.dataset.user,btn.dataset.cat));document.querySelectorAll(".accountBtn").forEach(btn=>btn.onclick=()=>openAccountModal(btn.dataset.user,btn.dataset.name,btn.dataset.username));document.querySelectorAll(".platinumBtn").forEach(btn=>btn.onclick=()=>awardPlatinum(btn.dataset.platinum,btn.dataset.name));
+  $("studentCards").innerHTML=members.filter(m=>(m.profiles?.display_name||"").toLowerCase().includes(query)).map(m=>{const ev=studentEvents(m.student_user_id),plat=platinumFor(m.student_user_id),tier=tierFor(ev,plat),name=m.profiles?.display_name||"Schüler/in",username=m.profiles?.username||"",weekly=Math.max(0,sum(ev.filter(e=>isThisWeek(e.created_at)))),eligible=tier.key==="gold"&&!plat&&!anyPlatinumThisYear;return `<div class="student"><div class="student-head"><div style="display:flex;gap:9px;align-items:center"><div class="avatar">${escapeHtml(name.slice(0,2).toUpperCase())}</div><div><div class="student-name">${escapeHtml(name)}</div><div class="student-meta">${username?"@"+escapeHtml(username):"kein Benutzername"}</div></div></div><span class="tier-chip ${tier.key}">${tier.icon} ${tier.name}</span></div><div class="points-row"><div class="points">${tier.points} <small>Pluspunkte</small></div><div class="week-chip">Woche ${weekly}/2</div></div>${individualFocusGoals(m.student_user_id).length?`<div class="student-focus-inline">${individualFocusGoals(m.student_user_id).map(g=>`<span class="student-focus-chip" title="${escapeHtml(g.title)}">${focusIcon(g.category)} ${escapeHtml(g.title)}</span>`).join("")}</div><div class="goal-award-row">${individualFocusGoals(m.student_user_id).map(g=>`<button class="goal-award-btn" data-user="${m.student_user_id}" data-cat="${escapeHtml(g.category)}" data-title="${escapeHtml(g.title)}" ${weekly>=2?"disabled":""}>✓ Ziel: ${escapeHtml(g.title)}</button>`).join("")}</div>`:""}<div class="quick-awards">${cats.map(c=>`<button class="quickBtn" data-user="${m.student_user_id}" data-cat="${c}" ${weekly>=2?"disabled":""} title="${c}">${catIcons[c]}<br>${c}</button>`).join("")}</div><div class="account-actions"><button class="studentGoalBtn" data-goal-user="${m.student_user_id}" data-name="${escapeHtml(name)}">🎯 Ziele</button><button class="accountBtn" data-user="${m.student_user_id}" data-name="${escapeHtml(name)}" data-username="${escapeHtml(username)}">🔐 Zugang</button>${eligible?`<button class="platinumBtn" data-platinum="${m.student_user_id}" data-name="${escapeHtml(name)}">💎 Platin</button>`:""}</div></div>`}).join("")||'<div class="card">Keine passenden Schüler/innen.</div>';
+  document.querySelectorAll(".quickBtn").forEach(btn=>btn.onclick=()=>awardIndividual(btn.dataset.user,btn.dataset.cat,null));document.querySelectorAll(".goal-award-btn").forEach(btn=>btn.onclick=()=>awardIndividual(btn.dataset.user,btn.dataset.cat,`Ziel: ${btn.dataset.title}`));document.querySelectorAll(".studentGoalBtn").forEach(btn=>btn.onclick=()=>openGoalModal(btn.dataset.goalUser,btn.dataset.name));document.querySelectorAll(".accountBtn").forEach(btn=>btn.onclick=()=>openAccountModal(btn.dataset.user,btn.dataset.name,btn.dataset.username));document.querySelectorAll(".platinumBtn").forEach(btn=>btn.onclick=()=>awardPlatinum(btn.dataset.platinum,btn.dataset.name));
 }
-async function awardIndividual(studentId,category){const {error}=await supabaseClient.rpc("award_individual_point",{p_class:currentClassId,p_student:studentId,p_category:category,p_note:null});if(error)alert(error.message);await loadCurrentClass()}
+async function awardIndividual(studentId,category,note=null){const {error}=await supabaseClient.rpc("award_individual_point",{p_class:currentClassId,p_student:studentId,p_category:category,p_note:note});if(error)alert(error.message);await loadCurrentClass()}
 async function awardPlatinum(studentId,name){if(!confirm(`${name} wirklich die Platin-Auszeichnung ${currentSchoolYear()} verleihen? Pro Klasse ist nur eine Platin-Auszeichnung pro Schuljahr möglich.`))return;const {error}=await supabaseClient.rpc("award_platinum",{p_class:currentClassId,p_student:studentId,p_note:null});if(error)alert(error.message);else await loadCurrentClass()}
 $("studentSearch").addEventListener("input",renderStudents);
+
+
+function renderGoalsPage(){
+  if(!isTeacher()||!currentClassId||!$("goalStudentGrid"))return;
+  $("classFocusManageList").innerHTML=renderFocusList(classFocusGoals(),"Noch kein Klassenfokus festgelegt.");
+  const q=($("goalStudentSearch")?.value||"").trim().toLowerCase();
+  $("goalStudentGrid").innerHTML=members
+    .filter(m=>(m.profiles?.display_name||"").toLowerCase().includes(q))
+    .map(m=>{
+      const name=m.profiles?.display_name||"Schüler/in";
+      const gs=individualFocusGoals(m.student_user_id);
+      return `<article class="goal-student-card">
+        <div class="goal-student-head">
+          <div><strong>${escapeHtml(name)}</strong><div class="student-meta">${escapeHtml(m.profiles?.username||"")}</div></div>
+          <button class="goalEditStudentBtn" data-id="${m.student_user_id}" data-name="${escapeHtml(name)}">Bearbeiten</button>
+        </div>
+        <div class="focus-list">${gs.length?gs.map(g=>`<div class="focus-item"><div class="focus-icon">${focusIcon(g.category)}</div><div style="flex:1"><strong>${escapeHtml(g.title)}</strong><small>${escapeHtml(g.category)}</small><button class="goal-complete-btn" data-goal-complete="${g.id}">✓ Ziel erreicht · +3 Bonuspunkte</button></div></div>`).join(""):`<div class="focus-empty">Noch kein individuelles Ziel.</div>`}</div>
+      </article>`;
+    }).join("") || '<div class="card">Keine passenden Schüler/innen.</div>';
+  document.querySelectorAll(".goalEditStudentBtn").forEach(b=>b.onclick=()=>openGoalModal(b.dataset.id,b.dataset.name));
+  document.querySelectorAll(".goal-complete-btn").forEach(b=>b.onclick=async()=>{if(!confirm("Ziel als erreicht markieren und 3 Bonuspunkte gutschreiben?"))return;const {error}=await supabaseClient.rpc("complete_focus_goal",{p_goal_id:Number(b.dataset.goalComplete)});if(error)alert(error.message);else await loadCurrentClass()});
+}
+
+function goalOptionsHtml(selected,isClassGoal){
+  const opts=isClassGoal?["Klasse",...cats]:cats;
+  return opts.map(c=>`<option value="${c}" ${c===selected?"selected":""}>${focusIcon(c)} ${c}</option>`).join("");
+}
+
+function openGoalModal(studentId=null,name=""){
+  goalEditorStudentId=studentId||null;
+  const isClassGoal=!goalEditorStudentId;
+  $("goalModalTitle").textContent=isClassGoal?"Klassenfokus festlegen":`Ziele für ${name}`;
+  $("goalModalInfo").textContent=isClassGoal
+    ?"Diese Ziele sehen alle Mitglieder der Klasse und die Smartboard-Ansicht."
+    :"Diese Ziele sieht nur die betreffende Person und die Lehrkraft.";
+
+  const existing=isClassGoal?classFocusGoals():individualFocusGoals(goalEditorStudentId);
+  const initial=[...existing];
+  while(initial.length<3)initial.push({category:isClassGoal?"Klasse":"Fokus",title:""});
+
+  $("goalEditorRows").innerHTML=initial.slice(0,3).map((g,i)=>`
+    <div class="goal-editor-row" data-row="${i}">
+      <select class="goalCategory">${goalOptionsHtml(g.category||(isClassGoal?"Klasse":"Fokus"),isClassGoal)}</select>
+      <input class="goalTitle" maxlength="180" value="${escapeHtml(g.title||"")}" placeholder="${isClassGoal?"z. B. Wir sind in zwei Minuten arbeitsbereit.":"z. B. Ich beginne zügig mit der Arbeit."}">
+      <button class="goal-remove-btn" type="button">Leeren</button>
+    </div>`).join("");
+
+  document.querySelectorAll(".goal-remove-btn").forEach(btn=>btn.onclick=()=>{
+    btn.closest(".goal-editor-row").querySelector(".goalTitle").value="";
+  });
+
+  const presets=isClassGoal?classGoalPresets:studentGoalPresets;
+  $("goalSuggestionChips").innerHTML=presets.map(([cat,title])=>
+    `<button type="button" class="goal-suggestion-chip" data-cat="${escapeHtml(cat)}" data-title="${escapeHtml(title)}">${focusIcon(cat)} ${escapeHtml(title)}</button>`
+  ).join("");
+  document.querySelectorAll(".goal-suggestion-chip").forEach(btn=>btn.onclick=()=>{
+    const rows=[...document.querySelectorAll(".goal-editor-row")];
+    const target=rows.find(r=>!r.querySelector(".goalTitle").value.trim())||rows[rows.length-1];
+    target.querySelector(".goalCategory").value=btn.dataset.cat;
+    target.querySelector(".goalTitle").value=btn.dataset.title;
+  });
+
+  showMsg("goalModalMsg","");
+  $("goalModal").classList.remove("hidden");
+}
+
+$("closeGoalModalBtn").onclick=()=>{$("goalModal").classList.add("hidden");goalEditorStudentId=null};
+$("editClassFocusBtn").onclick=()=>openGoalModal(null,"");
+$("editClassFocusPageBtn").onclick=()=>openGoalModal(null,"");
+$("goalStudentSearch").addEventListener("input",renderGoalsPage);
+
+$("saveGoalsBtn").onclick=async()=>{
+  const goals=[...document.querySelectorAll(".goal-editor-row")].map(row=>({
+    category:row.querySelector(".goalCategory").value,
+    title:row.querySelector(".goalTitle").value.trim()
+  })).filter(g=>g.title);
+
+  $("saveGoalsBtn").disabled=true;
+  const {error}=await supabaseClient.rpc("save_focus_goals",{
+    p_class:currentClassId,
+    p_student:goalEditorStudentId,
+    p_goals:goals
+  });
+  $("saveGoalsBtn").disabled=false;
+
+  if(error){showMsg("goalModalMsg",error.message);return}
+  $("goalModal").classList.add("hidden");
+  goalEditorStudentId=null;
+  await loadCurrentClass();
+};
+
+
+
+function shopItemEligible(item){
+  if(isTeacher())return true;
+  if(item.scope==="class")return Number(shopState.class_balance||0)>=Number(item.cost||0);
+  const tierOk=Number(shopState.tier_rank||0)>=Number(item.min_tier||0);
+  const balanceOk=Number(shopState.personal_balance||0)>=Number(item.cost||0)||Number(item.group_max||1)>1;
+  return tierOk&&balanceOk;
+}
+function shopTierText(rank){return ["ohne Stufe","Bronze","Silber","Gold","Platin"][Number(rank)||0]||"ohne Stufe"}
+function renderShop(){
+  if(!$("shopItemGrid")||!currentClassId)return;
+  $("shopPersonalBalance").textContent=shopState.personal_balance||0;
+  $("shopClassBalance").textContent=shopState.class_balance||0;
+  $("shopPersonalTab").classList.toggle("active",shopScope==="personal");
+  $("shopClassTab").classList.toggle("active",shopScope==="class");
+
+  const items=(shopState.items||[]).filter(i=>i.scope===shopScope);
+  $("shopItemGrid").innerHTML=items.map(i=>{
+    const eligible=shopItemEligible(i),tags=[];
+    if(i.scope==="personal")tags.push(shopTierText(i.min_tier));
+    if(Number(i.group_max||1)>1)tags.push(`bis ${i.group_max} gemeinsam`);
+    if(i.once_per_school_year)tags.push("1× pro Schuljahr");
+    let reason="";
+    if(!isTeacher()&&!eligible){
+      if(i.scope==="personal"&&Number(shopState.tier_rank||0)<Number(i.min_tier||0))reason=`Erst ab ${shopTierText(i.min_tier)}`;
+      else reason="Guthaben reicht noch nicht";
+    }
+    return `<article class="shop-card ${!eligible&&!isTeacher()?"locked":""}">
+      <div class="shop-card-top"><div class="shop-emoji">${escapeHtml(i.emoji||"🎁")}</div><div class="shop-price">${i.cost} ✦</div></div>
+      <h3>${escapeHtml(i.title)}</h3><p>${escapeHtml(i.description||"")}</p>
+      <div class="shop-tags">${tags.map(t=>`<span class="shop-tag">${escapeHtml(t)}</span>`).join("")}</div>
+      ${isTeacher()?`<div class="hint">Für Schüler/innen im Shop sichtbar.</div>`:`<button class="shop-buy" data-shop-item="${i.id}" ${!eligible?"disabled":""}>${eligible?"Beantragen":escapeHtml(reason)}</button>`}
+    </article>`;
+  }).join("");
+
+  document.querySelectorAll(".shop-buy").forEach(b=>b.onclick=()=>openShopModal(Number(b.dataset.shopItem)));
+  $("shopRequestTitle").textContent=isTeacher()?"Shop-Anträge":"Meine Anträge";
+  $("shopRequestSubtitle").textContent=isTeacher()?"Erst mit deiner Bestätigung wird Guthaben abgezogen.":"Guthaben wird erst nach Bestätigung durch die Lehrkraft abgezogen.";
+  const reqs=shopState.requests||[];
+  $("shopRequestList").innerHTML=reqs.length?reqs.map(r=>`<div class="shop-request">
+    <div><strong>${escapeHtml(r.item_emoji||"🎁")} ${escapeHtml(r.item_title||"Belohnung")} · ${r.cost} ✦</strong>
+      ${isTeacher()?`<small>Beantragt von ${escapeHtml(r.requester_name||"Schüler/in")}</small>`:""}
+      <span class="shop-status ${r.status}">${r.status==="pending"?"offen":r.status==="approved"?"✓ bestätigt":"abgelehnt"}</span>
+      ${r.teacher_note?`<small>${escapeHtml(r.teacher_note)}</small>`:""}
+    </div>
+    ${isTeacher()&&r.status==="pending"?`<div class="shop-request-actions"><button class="approve shopResolveBtn" data-id="${r.id}" data-approve="1">Bestätigen</button><button class="reject shopResolveBtn" data-id="${r.id}" data-approve="0">Ablehnen</button></div>`:""}
+  </div>`).join(""):'<div class="focus-empty">Noch keine Shop-Anträge.</div>';
+
+  document.querySelectorAll(".shopResolveBtn").forEach(b=>b.onclick=async()=>{
+    const approve=b.dataset.approve==="1",note=approve?null:(prompt("Optionaler Hinweis zur Ablehnung:")||null);
+    const {error}=await supabaseClient.rpc("resolve_shop_request",{p_request_id:Number(b.dataset.id),p_approve:approve,p_note:note});
+    if(error)alert(error.message);else await loadCurrentClass();
+  });
+}
+$("shopPersonalTab").onclick=()=>{shopScope="personal";renderShop()};
+$("shopClassTab").onclick=()=>{shopScope="class";renderShop()};
+
+function openShopModal(itemId){
+  const item=(shopState.items||[]).find(i=>Number(i.id)===Number(itemId));if(!item)return;
+  shopModalItemId=itemId;
+  $("shopModalTitle").textContent=`${item.emoji||"🎁"} ${item.title}`;
+  $("shopModalInfo").textContent=`Kosten: ${item.cost} Bonuspunkte${item.group_max>1?" · bis zu "+item.group_max+" Gold-Schüler/innen können zusammenlegen":""}`;
+  $("shopGroupBlock").classList.toggle("hidden",!(item.scope==="personal"&&Number(item.group_max)>1));
+  if(item.scope==="personal"&&Number(item.group_max)>1){
+    const others=(shopClassmates||[]).filter(x=>x.user_id!==profile.id);
+    $("shopGroupOptions").innerHTML=others.map(x=>`<label class="shop-person"><input type="checkbox" class="shop-person-check" value="${x.user_id}"><span>${escapeHtml(x.display_name||x.username||"Schüler/in")}</span></label>`).join("");
+    document.querySelectorAll(".shop-person-check").forEach(ch=>ch.onchange=()=>{
+      const checked=[...document.querySelectorAll(".shop-person-check:checked")];
+      if(checked.length>Number(item.group_max)-1){ch.checked=false;alert(`Maximal ${item.group_max} Personen insgesamt.`)}
+    });
+  }else $("shopGroupOptions").innerHTML="";
+  showMsg("shopModalMsg","");$("shopModal").classList.remove("hidden");
+}
+$("closeShopModalBtn").onclick=()=>{$("shopModal").classList.add("hidden");shopModalItemId=null};
+$("submitShopRequestBtn").onclick=async()=>{
+  const participants=[...document.querySelectorAll(".shop-person-check:checked")].map(x=>x.value);
+  $("submitShopRequestBtn").disabled=true;
+  const {error}=await supabaseClient.rpc("request_shop_item",{p_class:currentClassId,p_item_id:shopModalItemId,p_participants:participants});
+  $("submitShopRequestBtn").disabled=false;
+  if(error){showMsg("shopModalMsg",error.message);return}
+  $("shopModal").classList.add("hidden");shopModalItemId=null;await loadCurrentClass();
+};
+
 
 function renderRewards(){
   if(!$("rewardGrid"))return;$("rewardGrid").innerHTML=(rewards||[]).map(r=>`<article class="reward-card ${r.unlocked?"unlocked":"locked"} ${r.claimed?"claimed":""}"><div class="reward-point">${r.milestone} Punkte</div><div class="reward-emoji">${escapeHtml(r.emoji||"🎁")}</div><h3>${escapeHtml(r.label||"Mystery Unlock")}</h3><p>${escapeHtml(r.description||"")}</p><div class="reward-status ${r.unlocked?"open":""}">${r.claimed?"✓ Eingelöst":r.unlocked?"✓ Freigeschaltet":"🔒 Noch gesperrt"}</div>${isTeacher()?`<div class="reward-actions"><button class="editRewardBtn" data-id="${r.id}">Bearbeiten</button>${r.unlocked&&!r.claimed?`<button class="claimRewardBtn" data-id="${r.id}">Als eingelöst markieren</button>`:""}</div>`:""}</article>`).join("");document.querySelectorAll(".editRewardBtn").forEach(b=>b.onclick=()=>openRewardModal(b.dataset.id));document.querySelectorAll(".claimRewardBtn").forEach(b=>b.onclick=()=>claimReward(b.dataset.id));
@@ -148,14 +364,14 @@ async function undoEvent(kind,id){if(!confirm("Diesen Punkt als Fehlvergabe korr
 async function awardClassPoint(){showMsg("classPointMsg","");const {error}=await supabaseClient.rpc("award_class_point",{p_class:currentClassId,p_reason:"Doppelstunde"});if(error)showMsg("classPointMsg",error.message);else await loadCurrentClass()}
 $("awardClassPointBtn").onclick=awardClassPoint;$("mobileClassPointBtn").onclick=awardClassPoint;
 
-function renderManage(){if(!isTeacher()||!currentClassId)return;const c=activeClass();$("joinCode").textContent=c?.join_code||"–";$("challengeInput").value=currentState?.challenge_text||"";const link=displayLink();$("displayLinkText").textContent=link}
+function renderManage(){if(!isTeacher()||!currentClassId)return;const c=activeClass();$("joinCode").textContent=c?.join_code||"–";$("challengeInput").value=currentState?.challenge_text||"";const link=displayLink();$("displayLinkText").textContent=link;if($("classFocusManageList"))$("classFocusManageList").innerHTML=renderFocusList(classFocusGoals(),"Noch kein Klassenfokus festgelegt.")}
 function displayLink(){const token=activeClass()?.public_display_token;return token?`${location.origin}${location.pathname}?display=${token}`:""}
 $("displayBtn").onclick=()=>{const u=displayLink();if(u)window.open(u,"_blank")};$("openDisplayLinkBtn").onclick=()=>{const u=displayLink();if(u)window.open(u,"_blank")};$("copyDisplayLinkBtn").onclick=async()=>{const u=displayLink();if(!u)return;try{await navigator.clipboard.writeText(u);$("displayLinkText").textContent="✓ Link kopiert: "+u}catch{$("displayLinkText").textContent=u}};
 
 $("createClassBtn").onclick=async()=>{const name=$("newClassName").value.trim();if(!name)return;const {error}=await supabaseClient.from("classes").insert({name,teacher_id:profile.id,school_year:currentSchoolYear()});showMsg("createMsg",error?error.message:"Klasse angelegt.",!error);if(!error){$("newClassName").value="";await loadClasses();showPage("manage")}};
-$("challengePlusBtn").onclick=async()=>{const {error}=await supabaseClient.rpc("increment_challenge",{p_class:currentClassId});if(error)showMsg("challengeMsg",error.message);else await loadCurrentClass()};
+$("challengePlusBtn").onclick=async()=>{const {data,error}=await supabaseClient.rpc("increment_challenge",{p_class:currentClassId});if(error){showMsg("challengeMsg",error.message);return}if(data?.bonus_awarded)alert("Wochenchallenge geschafft! +3 Bonuspunkte für jede/n Schüler/in und +3 Gemeinschaftsguthaben.");await loadCurrentClass()};
 $("challengeResetBtn").onclick=async()=>{const {error}=await supabaseClient.rpc("reset_challenge",{p_class:currentClassId});if(error)showMsg("challengeMsg",error.message);else await loadCurrentClass()};
-$("saveChallengeBtn").onclick=async()=>{const {error}=await supabaseClient.from("class_state").update({challenge_text:$("challengeInput").value.trim(),challenge_goal:2}).eq("class_id",currentClassId);showMsg("challengeMsg",error?error.message:"Gespeichert.",!error);if(!error)await loadCurrentClass()};
+$("saveChallengeBtn").onclick=async()=>{const {error}=await supabaseClient.rpc("set_class_challenge",{p_class:currentClassId,p_text:$("challengeInput").value.trim(),p_goal:2});showMsg("challengeMsg",error?error.message:"Neue Wochenchallenge gespeichert.",!error);if(!error)await loadCurrentClass()};
 $("startSeasonBtn").onclick=async()=>{const cp=classPoints();if(cp<20&&!confirm(`Die aktuelle Season hat erst ${cp}/20 Punkte. Trotzdem neu starten?`))return;const {error}=await supabaseClient.rpc("start_new_season",{p_class:currentClassId});showMsg("seasonMsg",error?error.message:"Neue Season gestartet.",!error);if(!error)await loadCurrentClass()};
 $("rolloverBtn").onclick=async()=>{const name=$("rolloverName").value.trim();if(!name){showMsg("rolloverMsg","Bitte einen neuen Klassennamen eingeben.");return}if(!confirm("Aktuelle Klasse archivieren und neue Klasse anlegen?"))return;const {data,error}=await supabaseClient.rpc("rollover_class",{p_class:currentClassId,p_new_name:name,p_copy_students:$("copyStudents").checked});showMsg("rolloverMsg",error?error.message:"Schuljahreswechsel abgeschlossen.",!error);if(!error){currentClassId=data;$("rolloverName").value="";await loadClasses();showPage("dashboard")}};
 
