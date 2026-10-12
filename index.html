@@ -89,15 +89,32 @@
 
     <main>
       <header class="topbar">
-        <div><strong id="welcomeName">Willkommen</strong><span id="className"></span></div>
-        <div class="top-actions"><button id="displayBtn" class="ghost teacher-only">📺 Smartboard</button><select id="classSelect"></select></div>
+        <div class="topbar-welcome"><strong id="welcomeName">Willkommen</strong><span id="className"></span></div>
+        <div class="top-actions">
+          <div id="studentProfileChip" class="profile-chip student-only">
+            <span id="profileAvatar" class="profile-avatar">L+</span>
+            <span class="profile-copy"><strong id="profileName">Schüler/in</strong><small id="profileClass">Klasse</small></span>
+          </div>
+          <button id="displayBtn" class="ghost teacher-only">📺 Smartboard</button><select id="classSelect"></select>
+        </div>
       </header>
 
       <div class="content">
         <section id="dashboard" class="page">
-          <div class="headline"><div><h2>Klassenfortschritt</h2><p>Gemeinsamer Fortschritt – individuelle Entwicklung.</p></div><div class="team-pill">👥 Gemeinsam mehr erreichen</div></div>
+          <div class="headline"><div><h2 id="dashboardTitle">Klassenfortschritt</h2><p id="dashboardSubtitle">Gemeinsamer Fortschritt – individuelle Entwicklung.</p></div><div class="team-pill">👥 Gemeinsam mehr erreichen</div></div>
           <div id="noClass" class="card hidden"><h3>Noch keine Klasse</h3><p id="noClassText"></p></div>
           <div id="dashboardBody">
+            <div id="todayStrip" class="today-strip student-only hidden"></div>
+            <div class="student-hero-grid student-only">
+              <article class="card student-summary-card">
+                <div class="eyebrow">Deine Woche</div>
+                <div id="studentWeekSummary" class="student-week-summary"></div>
+              </article>
+              <article class="card next-step-card">
+                <div class="eyebrow">Dein nächster Schritt</div>
+                <div id="studentNextStep"></div>
+              </article>
+            </div>
             <div class="stats">
               <div class="stat"><span>Season</span><b id="seasonNumber">1</b><small>gemeinsame Runde</small></div>
               <div class="stat"><span>Klassenpunkte</span><b id="classPoints">0</b><small>von 20</small></div>
@@ -118,12 +135,16 @@
               <article class="card week-card"><div class="eyebrow">Diese Woche</div><h3>Zwei Doppelstunden – zwei Chancen</h3><div class="lesson-slots"><div id="lessonSlot1" class="lesson-slot"><b>○</b><span>Doppelstunde 1</span></div><div id="lessonSlot2" class="lesson-slot"><b>○</b><span>Doppelstunde 2</span></div></div><button id="awardClassPointBtn" class="primary teacher-only">+ Klassenpunkt</button><div id="classPointMsg" class="msg"></div></article>
               <article class="card mystery"><div class="eyebrow">Nächste Freischaltung</div><h3 id="rewardTitle">Bei 4 Punkten</h3><div class="gift" id="rewardIcon">🔒🎁</div><p id="rewardText">Der erste Unlock wartet.</p></article>
               <article class="card challenge"><div class="eyebrow">Aktuelle Challenge</div><h3 id="challenge">–</h3><div class="bar"><i id="challengeBar"></i></div><p><span id="challengeNow">0</span> / <span id="challengeGoal">2</span> Doppelstunden geschafft</p><div class="bonus-hint">🎁 Wochenchallenge geschafft: +3 Bonuspunkte für jede/n + 3 Gemeinschaftspunkte</div></article>
-              <article class="card"><div class="eyebrow">Serie</div><h3><span id="streak">0</span> gute Doppelstunden</h3><div id="streakFlames" class="streak-flames">○○○○○</div><p class="hint">Bereits verdiente Punkte gehen nicht verloren.</p></article>
+              <article class="card streak-card"><div class="eyebrow">Serie</div><h3><span id="streak">0</span> gute Doppelstunden</h3><div id="streakFlames" class="streak-flames">○○○○○</div><p id="streakHint" class="hint">Bleib dran – kleine Schritte zählen.</p></article>
               <article class="card class-focus-card"><div class="eyebrow">Unser Klassenfokus</div><h3>Woran wir gemeinsam arbeiten</h3><div id="classFocusList" class="focus-list"></div><button id="editClassFocusBtn" class="teacher-only focus-edit-btn">🎯 Klassenfokus bearbeiten</button></article>
             </div>
             <article class="card student-only personal-progress-card"><div class="personal-tier-head"><div><div class="eyebrow">Mein Fortschritt</div><h2 id="myTierTitle">Start</h2><p id="myTierHint"></p></div><div id="myTierMedal" class="tier-medal">○</div></div><div class="bar bigbar"><i id="myTierBar"></i></div><div id="myTierMeta" class="tier-meta"></div></article>
             <article class="card student-only personal-focus-card"><div class="eyebrow">Meine aktuellen Ziele</div><h3>Darauf achte ich besonders</h3><div id="myFocusGoals" class="focus-list personal-focus-list"></div><p class="hint">Deine individuellen Ziele sind nur für dich und deine Lehrkraft sichtbar.</p></article>
             <article class="card student-only"><div class="eyebrow">Meine Stärken</div><h3>Fünf Entwicklungsbereiche</h3><div id="myCategories" class="category-grid"></div><div id="myBadges" class="badge-row"></div></article>
+            <article class="card student-only activity-card">
+              <div class="activity-head"><div><div class="eyebrow">Aktivität</div><h3>Was zuletzt passiert ist</h3></div><button type="button" class="activity-link" data-jump-history>Ganzer Verlauf →</button></div>
+              <div id="studentActivityFeed" class="activity-feed"></div>
+            </article>
           </div>
         </section>
 
@@ -182,6 +203,7 @@
             <button id="shopClassTab" class="shop-tab">👥 Klassen-Shop</button>
           </div>
 
+          <div id="shopAlmost" class="shop-almost student-only"></div>
           <div id="shopItemGrid" class="shop-grid"></div>
 
           <article class="card shop-requests-card">
@@ -192,7 +214,7 @@
           </article>
         </section>
 
-        <section id="rewards" class="page hidden"><div class="headline"><div><h2>Freischaltungen</h2><p>Fünf Etappen pro Season – sichtbar, motivierend und überschaubar.</p></div></div><div id="rewardGrid" class="reward-grid"></div></section>
+        <section id="rewards" class="page hidden"><div class="headline"><div><h2>Freischaltungen</h2><p>Fünf Etappen pro Season – sichtbar, motivierend und überschaubar.</p></div></div><div id="rewardJourney" class="reward-journey"></div><div id="rewardGrid" class="reward-grid"></div></section>
 
         <section id="history" class="page hidden"><div class="headline"><div><h2>Verlauf</h2><p id="historySubtitle">Nachvollziehbar und korrigierbar.</p></div><div class="teacher-only"><select id="historyFilter"><option value="all">Alle</option><option value="individual">Individuell</option><option value="class">Klasse</option></select></div></div><div id="historyList" class="history-list"></div></section>
 
@@ -251,6 +273,7 @@
         </div>
         <button id="closeShopModalBtn" class="icon-close">✕</button>
       </div>
+      <div id="shopModalPreview" class="shop-modal-preview"></div>
       <div id="shopGroupBlock" class="hidden">
         <p class="hint">Gold-Belohnungen können von bis zu drei Gold-Schüler/innen gemeinsam bezahlt werden. Wähle höchstens zwei weitere Personen aus.</p>
         <div id="shopGroupOptions" class="shop-group-options"></div>
@@ -260,6 +283,27 @@
     </div>
   </div>
 
+  <div id="newsModal" class="modal-back hidden">
+    <div class="modal-card news-modal-card">
+      <div class="news-head"><div class="news-gift">🎁</div><div><h3>Neu seit deinem letzten Besuch</h3><p id="newsSubtitle" class="hint">Es gibt Neuigkeiten für dich.</p></div><button id="closeNewsModalBtn" class="icon-close">✕</button></div>
+      <div id="newsList" class="news-list"></div>
+      <button id="newsContinueBtn" class="primary">Weiter zur Übersicht →</button>
+    </div>
+  </div>
+
+  <div id="seasonModal" class="modal-back hidden">
+    <div class="modal-card season-modal-card">
+      <div class="season-trophy">🏆</div>
+      <div class="eyebrow">Gemeinsam geschafft</div>
+      <h2 id="seasonModalTitle">Season abgeschlossen!</h2>
+      <p id="seasonModalText">Ihr habt alle Klassenpunkte erreicht.</p>
+      <button id="closeSeasonModalBtn" class="primary">Stark – weiter geht’s!</button>
+    </div>
+  </div>
+
+  <div id="toastLayer" class="toast-layer"></div>
+  <div id="confettiLayer" class="confetti-layer" aria-hidden="true"></div>
+
   <div id="rewardModal" class="modal-back hidden"><div class="modal-card"><h3>Freischaltung bearbeiten</h3><input id="rewardEditId" type="hidden"><label>Emoji</label><input id="rewardEditEmoji" maxlength="8"><label>Titel</label><input id="rewardEditLabel"><label>Beschreibung</label><textarea id="rewardEditDescription"></textarea><label class="checkline"><input id="rewardEditMystery" type="checkbox"> Bis zur Freischaltung geheim halten</label><button id="saveRewardBtn" class="primary">Speichern</button><div class="modal-actions"><span></span><button id="closeRewardModalBtn">Schließen</button></div><div id="rewardEditMsg" class="msg"></div></div></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -267,3 +311,4 @@
 <script src="app.js"></script>
 </body>
 </html>
+

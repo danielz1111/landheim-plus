@@ -3,6 +3,7 @@ const configured = cfg.SUPABASE_URL && !cfg.SUPABASE_URL.startsWith("DEINE_") &&
 let supabaseClient=null, profile=null, classes=[], archivedClasses=[], currentClassId=null, currentState=null;
 let members=[], pointEvents=[], classEvents=[], rewards=[], platinumAwards=[], focusGoals=[], shopState={personal_balance:0,class_balance:0,tier_rank:0,items:[],requests:[]}, shopClassmates=[];
 let accountStudentId=null, historyMode="all", goalEditorStudentId=null, shopScope="personal", shopModalItemId=null;
+let newsShownThisSession=false, pendingSeenSnapshot=null, previousLiveState=null;
 const $=id=>document.getElementById(id);
 const cats=["Mitarbeit","Zuverlässigkeit","Teamwork","Fokus","Hilfsbereitschaft"];
 const catIcons={Mitarbeit:"💬",Zuverlässigkeit:"✓",Teamwork:"🤝",Fokus:"🎯",Hilfsbereitschaft:"♥",Klasse:"👥"};
@@ -32,6 +33,13 @@ const studentGoalPresets=[
   ["Hilfsbereitschaft","Ich trage zu einer guten Arbeitsatmosphäre bei."]
 ];
 const milestoneMeta={4:["⚡","Erster Unlock"],8:["🎁","Mystery"],12:["🎵","Team-Bonus"],16:["🗳️","Klassen-Voting"],20:["🏆","Season geschafft"]};
+const praiseTexts={
+  Mitarbeit:["Stark gemacht – du hast dich aktiv eingebracht.","Guter Beitrag – deine Mitarbeit hat heute geholfen.","Du warst aufmerksam dabei und hast dich eingebracht."],
+  Zuverlässigkeit:["Verlässlich – auf dich konnte man sich heute verlassen.","Gut vorbereitet und zuverlässig gearbeitet.","Du hast deine Aufgabe zuverlässig im Blick behalten."],
+  Teamwork:["Stark im Team – du hast andere gut mitgenommen.","Gemeinsam klappt es besser – guter Teambeitrag.","Du hast konstruktiv mit anderen zusammengearbeitet."],
+  Fokus:["Konzentriert geblieben – das hat sich ausgezahlt.","Du bist bei der Sache geblieben. Stark!","Guter Fokus – ruhig, klar und drangeblieben."],
+  Hilfsbereitschaft:["Danke fürs Unterstützen – das stärkt die Gruppe.","Du hast anderen geholfen, ohne ihnen die Arbeit abzunehmen.","Hilfsbereit und fair – genau so funktioniert Gemeinschaft."]
+};
 
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
 function sum(arr,key="delta"){return arr.reduce((a,x)=>a+(Number(x[key])||0),0)}
@@ -393,4 +401,219 @@ $("removeStudentBtn").onclick=async()=>{if(!accountStudentId||!confirm("Schüler
 $("exportUsernamesBtn").onclick=()=>{const c=activeClass(),rows=[["Name","Benutzername","Klasse"]];members.forEach(m=>rows.push([m.profiles?.display_name||"",m.profiles?.username||"",c?.name||""]));const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n"),blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`${(c?.name||"klasse").replace(/\s+/g,"_")}_Benutzernamen.csv`;a.click();URL.revokeObjectURL(a.href)};
 
 document.querySelectorAll(".nav[data-target]").forEach(btn=>btn.onclick=()=>showPage(btn.dataset.target));
+
+/* ===== Experience Upgrade 2026 ===== */
+function xpSafeGet(key,fallback=null){try{const v=localStorage.getItem(key);return v==null?fallback:JSON.parse(v)}catch{return fallback}}
+function xpSafeSet(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch{}}
+function xpKey(name){return profile?.id&&currentClassId?`lhp:${name}:${profile.id}:${currentClassId}`:null}
+function xpSeedPick(arr,seed){if(!arr?.length)return"";const n=String(seed??"").split("").reduce((a,c)=>a+c.charCodeAt(0),0);return arr[n%arr.length]}
+function xpPraise(e){if(e?.note&&String(e.note).trim())return String(e.note).replace(/^Ziel:\s*/,"");return xpSeedPick(praiseTexts[e?.category]||["Stark gemacht – bleib dran."],e?.id||e?.created_at)}
+function xpDate(ts){if(!ts)return"";const d=new Date(ts),t=new Date();if(d.toDateString()===t.toDateString())return"Heute";const y=new Date();y.setDate(y.getDate()-1);if(d.toDateString()===y.toDateString())return"Gestern";return d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"})}
+function xpStatus(s){return s==="pending"?"Beantragt":s==="approved"?"Bestätigt":s==="rejected"?"Nicht bestätigt":s==="redeemed"?"Eingelöst":s||""}
+function xpInitials(name){return String(name||"L+").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()||"L+"}
+function xpRequestFor(item){const reqs=shopState.requests||[];return reqs.find(r=>String(r.item_id||"")===String(item.id))||reqs.find(r=>r.item_title===item.title)}
+function xpBalance(item){return Number(item.scope==="class"?shopState.class_balance:shopState.personal_balance)||0}
+function xpProgress(item){return Math.max(0,Math.min(100,xpBalance(item)/Math.max(1,Number(item.cost||1))*100))}
+function xpSnapshot(){return{at:new Date().toISOString(),unlocked:(rewards||[]).filter(r=>r.unlocked).map(r=>String(r.id)),requests:Object.fromEntries((shopState.requests||[]).map(r=>[String(r.id),r.status])),season:Number(currentState?.season_number||1),classPoints:classPoints()}}
+function xpToast(message,kind="success"){const layer=$("toastLayer");if(!layer)return;const el=document.createElement("div");el.className=`app-toast ${kind}`;el.textContent=message;layer.appendChild(el);requestAnimationFrame(()=>el.classList.add("show"));setTimeout(()=>{el.classList.remove("show");setTimeout(()=>el.remove(),260)},2800)}
+function xpCelebrate(level="small"){const layer=$("confettiLayer");if(!layer)return;const count=level==="big"?34:level==="medium"?20:10;for(let i=0;i<count;i++){const p=document.createElement("i");p.style.left=(10+Math.random()*80)+"%";p.style.setProperty("--x",((Math.random()-.5)*180)+"px");p.style.setProperty("--r",(Math.random()*540-270)+"deg");p.style.animationDelay=(Math.random()*.18)+"s";layer.appendChild(p);setTimeout(()=>p.remove(),1500)}}
+
+function xpRenderProfile(){
+  if(!$("profileAvatar"))return;
+  $("profileAvatar").textContent=xpInitials(profile?.display_name);
+  $("profileName").textContent=profile?.display_name||"Schüler/in";
+  $("profileClass").textContent=activeClass()?.name||"Noch keine Klasse";
+}
+
+function xpRenderHero(){
+  if(isTeacher()||!currentClassId||!$("studentWeekSummary"))return;
+  const weekly=Math.max(0,sum(pointEvents.filter(e=>isThisWeek(e.created_at))));
+  const chNow=Number(currentState?.challenge_current||0),chGoal=Number(currentState?.challenge_goal||2);
+  $("studentWeekSummary").innerHTML=`
+    <div class="mini-progress-row"><span>⭐ Individualpunkte</span><strong>${weekly}/2</strong></div>
+    <div class="mini-progress"><i style="width:${Math.min(100,weekly/2*100)}%"></i></div>
+    <div class="mini-progress-row"><span>🔥 Wochenchallenge</span><strong>${chNow}/${chGoal}</strong></div>
+    <div class="mini-progress"><i style="width:${Math.min(100,chNow/Math.max(1,chGoal)*100)}%"></i></div>
+    <p class="student-summary-copy">${weekly>=2?"Deine zwei möglichen Individualpunkte für diese Woche sind geschafft.":`Diese Woche kannst du noch ${2-weekly} Individualpunkt${2-weekly===1?"":"e"} erreichen.`}</p>`;
+
+  const personal=(shopState.items||[]).filter(i=>i.scope==="personal"&&Number(shopState.tier_rank||0)>=Number(i.min_tier||0));
+  const candidates=personal.map(i=>({item:i,remaining:Math.max(0,Number(i.cost||0)-Number(shopState.personal_balance||0)),req:xpRequestFor(i)}))
+    .filter(x=>!x.req||!["pending","approved","redeemed"].includes(x.req.status))
+    .sort((a,b)=>a.remaining-b.remaining||Number(a.item.cost)-Number(b.item.cost));
+  const next=candidates[0];
+  if(next){
+    const available=next.remaining===0;
+    $("studentNextStep").innerHTML=`<div class="next-step-main"><span class="next-step-emoji">${escapeHtml(next.item.emoji||"🎁")}</span><div><strong>${available?"Jetzt verfügbar":`Noch ${next.remaining} Bonuspunkt${next.remaining===1?"":"e"}`}</strong><h3>${escapeHtml(next.item.title)}</h3><p>${available?"Du kannst die Belohnung jetzt beantragen.":"Du bist schon ziemlich nah dran."}</p></div></div><button class="next-step-button" data-open-shop>Zum Shop →</button>`;
+    $("studentNextStep").querySelector("[data-open-shop]").onclick=()=>showPage("shop");
+  }else{
+    const nextReward=(rewards||[]).find(r=>!r.unlocked);
+    $("studentNextStep").innerHTML=nextReward?`<div class="next-step-main"><span class="next-step-emoji">🎁</span><div><strong>Noch ${Math.max(0,nextReward.milestone-classPoints())} Klassenpunkte</strong><h3>${escapeHtml(nextReward.label||"Nächste Freischaltung")}</h3><p>Gemeinsam kommt ihr der nächsten Klassenbelohnung näher.</p></div></div>`:'<div class="next-step-main"><span class="next-step-emoji">🏆</span><div><strong>Alles erreicht</strong><h3>Season komplett</h3><p>Stark – alle Klassenfreischaltungen sind geschafft.</p></div></div>';
+  }
+}
+
+function xpActivityItems(){
+  const items=[];
+  pointEvents.filter(e=>Number(e.delta)>0).forEach(e=>items.push({when:e.created_at,icon:"⭐",tone:"green",title:`+${e.delta} Individualpunkt`,sub:`${e.category} · ${xpPraise(e)}`}));
+  classEvents.filter(e=>Number(e.delta)>0).forEach(e=>items.push({when:e.created_at,icon:"👥",tone:"blue",title:"+1 Klassenpunkt",sub:"Gemeinsam einen Schritt weiter."}));
+  (shopState.requests||[]).forEach(r=>{if(r.created_at||r.updated_at)items.push({when:r.updated_at||r.created_at,icon:r.status==="approved"?"✅":r.status==="rejected"?"↩":"🎁",tone:r.status==="approved"?"green":r.status==="rejected"?"red":"gold",title:`${xpStatus(r.status)}: ${r.item_title||"Belohnung"}`,sub:r.status==="approved"?"Von deiner Lehrkraft bestätigt.":r.status==="rejected"?(r.teacher_note||"Diesmal hat es leider nicht geklappt."):"Dein Antrag wartet auf Bestätigung."})});
+  return items.sort((a,b)=>new Date(b.when||0)-new Date(a.when||0));
+}
+
+function xpRenderActivity(){
+  if(isTeacher()||!$("studentActivityFeed"))return;
+  const items=xpActivityItems().slice(0,6);
+  $("studentActivityFeed").innerHTML=items.length?items.map(i=>`<div class="activity-item"><span class="activity-icon ${i.tone}">${i.icon}</span><div><strong>${escapeHtml(i.title)}</strong><small>${escapeHtml(i.sub)}</small></div><time>${xpDate(i.when)}</time></div>`).join(""):'<div class="focus-empty">Noch keine Aktivitäten – deine nächsten Erfolge erscheinen hier.</div>';
+}
+
+function xpRenderToday(){
+  if(isTeacher()||!$("todayStrip"))return;
+  const today=new Date().toDateString(),mine=pointEvents.filter(e=>Number(e.delta)>0&&new Date(e.created_at).toDateString()===today),cls=classEvents.filter(e=>Number(e.delta)>0&&new Date(e.created_at).toDateString()===today);
+  const bits=[];if(mine.length)bits.push(`⭐ +${sum(mine)} Individualpunkt${sum(mine)===1?"":"e"}`);if(cls.length)bits.push(`👥 +${sum(cls)} Klassenpunkt${sum(cls)===1?"":"e"}`);
+  const req=(shopState.requests||[]).find(r=>r.status==="approved"&&(r.updated_at||r.created_at)&&new Date(r.updated_at||r.created_at).toDateString()===today);if(req)bits.push(`✅ ${req.item_title||"Belohnung"} bestätigt`);
+  $("todayStrip").classList.toggle("hidden",bits.length===0);
+  $("todayStrip").innerHTML=bits.length?`<strong>Heute neu:</strong> ${bits.map(x=>`<span>${escapeHtml(x)}</span>`).join("")}`:"";
+}
+
+function xpRenderJourney(){
+  if(!$("rewardJourney"))return;
+  const cp=classPoints();
+  $("rewardJourney").innerHTML=`<div class="journey-line"><i style="width:${Math.min(100,cp/Math.max(1,Number(currentState?.season_goal||20))*100)}%"></i></div>`+(rewards||[]).map(r=>`<div class="journey-stop ${r.claimed?"claimed":r.unlocked?"unlocked":""}"><div class="journey-dot">${r.claimed?"✓":r.unlocked?(r.emoji||"🎁"):"🔒"}</div><strong>${r.milestone}</strong><span>${escapeHtml(r.unlocked?(r.label||"Freigeschaltet"):"Noch gesperrt")}</span></div>`).join("");
+}
+
+function xpRenderShopAlmost(){
+  if(isTeacher()||!$("shopAlmost"))return;
+  const items=(shopState.items||[]).filter(i=>i.scope===shopScope&&(!xpRequestFor(i)||!["pending","approved","redeemed"].includes(xpRequestFor(i).status)))
+    .map(i=>({item:i,remaining:Math.max(0,Number(i.cost||0)-xpBalance(i)),tierOk:i.scope==="class"||Number(shopState.tier_rank||0)>=Number(i.min_tier||0)}))
+    .filter(x=>x.tierOk&&x.remaining>0).sort((a,b)=>a.remaining-b.remaining).slice(0,3);
+  $("shopAlmost").innerHTML=items.length?`<div class="shop-almost-title"><span>⭐</span><div><strong>Fast erreichbar für dich</strong><small>Nur noch wenige Punkte bis zu diesen Belohnungen.</small></div></div><div class="shop-almost-items">${items.map(x=>`<button class="shop-almost-item" data-shop-item="${x.item.id}"><span>${escapeHtml(x.item.emoji||"🎁")}</span><div><strong>${escapeHtml(x.item.title)}</strong><small>Noch ${x.remaining} Punkt${x.remaining===1?"":"e"}</small><div class="mini-progress"><i style="width:${xpProgress(x.item)}%"></i></div></div></button>`).join("")}</div>`:"";
+  $("shopAlmost").classList.toggle("hidden",!items.length);
+  $("shopAlmost").querySelectorAll("[data-shop-item]").forEach(b=>b.onclick=()=>openShopModal(Number(b.dataset.shopItem)));
+}
+
+function xpEnhanceShopCards(){
+  if(isTeacher())return;
+  const items=(shopState.items||[]).filter(i=>i.scope===shopScope);
+  [...document.querySelectorAll("#shopItemGrid .shop-card")].forEach((card,idx)=>{
+    const item=items[idx];if(!item||card.dataset.xpEnhanced)return;card.dataset.xpEnhanced="1";
+    const req=xpRequestFor(item),eligible=shopItemEligible(item),remaining=Math.max(0,Number(item.cost||0)-xpBalance(item));
+    const active=req&&["pending","approved","redeemed"].includes(req.status);
+    const status=active?xpStatus(req.status):(eligible?"Verfügbar":remaining<=3?"Fast erreicht":"Gesperrt");
+    const statusClass=active?req.status:(eligible?"available":remaining<=3?"near":"locked");
+    card.insertAdjacentHTML("afterbegin",`<div class="shop-card-status ${statusClass}">${escapeHtml(status)}</div>`);
+    const tags=card.querySelector(".shop-tags");
+    if(tags)tags.insertAdjacentHTML("beforebegin",`<div class="shop-progress-row"><span>${Math.min(xpBalance(item),Number(item.cost||0))} / ${item.cost}</span><span>${remaining>0?`noch ${remaining}`:"bereit"}</span></div><div class="mini-progress shop-card-progress"><i style="width:${xpProgress(item)}%"></i></div>`);
+    const buy=card.querySelector(".shop-buy");
+    if(buy){
+      buy.textContent=active?xpStatus(req.status):(eligible?"Einlösen":buy.textContent);
+      if(active)buy.disabled=true;
+      const wrap=document.createElement("div");wrap.className="shop-card-actions";buy.parentNode.insertBefore(wrap,buy);wrap.appendChild(buy);
+      const detail=document.createElement("button");detail.className="shop-details";detail.textContent="Ansehen";detail.onclick=()=>openShopModal(Number(item.id));wrap.insertBefore(detail,buy);
+    }
+  });
+  if($("shopRequestTitle"))$("shopRequestTitle").textContent="Meine Belohnungen";
+  if($("shopRequestSubtitle"))$("shopRequestSubtitle").textContent="Hier siehst du, was beantragt, bestätigt oder abgelehnt wurde.";
+}
+
+function xpBuildNews(){
+  if(isTeacher()||newsShownThisSession)return null;
+  const key=xpKey("seen");if(!key)return null;
+  const prev=xpSafeGet(key,null),now=xpSnapshot();
+  if(!prev){xpSafeSet(key,now);newsShownThisSession=true;return null}
+  const since=new Date(prev.at||0),items=[];
+  pointEvents.filter(e=>Number(e.delta)>0&&new Date(e.created_at)>since).slice().reverse().forEach(e=>items.push({icon:"⭐",tone:"green",title:`+${e.delta} Individualpunkt · ${e.category}`,text:xpPraise(e),when:e.created_at}));
+  classEvents.filter(e=>Number(e.delta)>0&&new Date(e.created_at)>since).slice().reverse().forEach(e=>items.push({icon:"👥",tone:"blue",title:"+1 Klassenpunkt",text:"Eure Klasse ist wieder einen Schritt näher an der nächsten Freischaltung.",when:e.created_at}));
+  const oldUnlock=new Set(prev.unlocked||[]);(rewards||[]).filter(r=>r.unlocked&&!oldUnlock.has(String(r.id))).forEach(r=>items.push({icon:r.emoji||"🎁",tone:"gold",title:"Neue Klassenfreischaltung",text:r.label||"Eine neue Belohnung wurde freigeschaltet.",when:new Date().toISOString()}));
+  const oldReq=prev.requests||{};(shopState.requests||[]).forEach(r=>{const before=oldReq[String(r.id)];if(before&&before!==r.status)items.push({icon:r.status==="approved"?"✅":"↩",tone:r.status==="approved"?"green":"red",title:`${r.item_title||"Belohnung"}: ${xpStatus(r.status)}`,text:r.status==="approved"?"Herzlichen Glückwunsch – deine Belohnung wurde bestätigt.":(r.teacher_note||"Diesmal hat es leider nicht geklappt. Versuch es gerne wieder."),when:r.updated_at||new Date().toISOString()})});
+  pendingSeenSnapshot=now;newsShownThisSession=true;return items.slice(-6);
+}
+
+function xpMaybeNews(){
+  const items=xpBuildNews();
+  if(!items?.length){if(pendingSeenSnapshot){const key=xpKey("seen");if(key)xpSafeSet(key,pendingSeenSnapshot);pendingSeenSnapshot=null}return}
+  $("newsSubtitle").textContent=items.length===1?"Eine Sache ist neu für dich.":`${items.length} Dinge sind neu für dich.`;
+  $("newsList").innerHTML=items.map(i=>`<div class="news-item ${i.tone}"><span class="news-icon">${i.icon}</span><div><strong>${escapeHtml(i.title)}</strong><p>${escapeHtml(i.text)}</p></div><time>${xpDate(i.when)}</time></div>`).join("");
+  $("newsModal").classList.remove("hidden");xpCelebrate(items.some(i=>i.title.includes("Freischaltung"))?"big":"medium");
+}
+
+function xpCloseNews(){
+  if(pendingSeenSnapshot){const key=xpKey("seen");if(key)xpSafeSet(key,pendingSeenSnapshot);pendingSeenSnapshot=null}
+  $("newsModal").classList.add("hidden");
+}
+
+function xpMaybeSeason(){
+  if(isTeacher()||classPoints()<Number(currentState?.season_goal||20))return;
+  const key=xpKey("seasonCelebrated"),season=Number(currentState?.season_number||1);if(Number(xpSafeGet(key,0))===season)return;
+  xpSafeSet(key,season);$("seasonModalTitle").textContent=`Season ${season} abgeschlossen!`;$("seasonModalText").textContent=`Ihr habt gemeinsam ${currentState?.season_goal||20} Klassenpunkte erreicht. Jede Etappe zählt – stark als Klasse!`;$("seasonModal").classList.remove("hidden");xpCelebrate("big");
+}
+
+function xpLiveChanges(){
+  if(isTeacher())return;
+  const reqs=Object.fromEntries((shopState.requests||[]).map(r=>[String(r.id),r.status]));
+  const now={points:Math.max(0,sum(pointEvents)),classPoints:classPoints(),unlocked:(rewards||[]).filter(r=>r.unlocked).length,requests:reqs};
+  if(previousLiveState){
+    if(now.points>previousLiveState.points){xpToast("+1 Individualpunkt – stark gemacht!");xpCelebrate("small")}
+    if(now.classPoints>previousLiveState.classPoints)xpToast("+1 Klassenpunkt – gemeinsam weiter!","info");
+    if(now.unlocked>previousLiveState.unlocked){xpToast("Neue Klassenfreischaltung! 🎁");xpCelebrate("medium")}
+    const oldIds=new Set(Object.keys(previousLiveState.requests||{}));
+    if(Object.entries(reqs).some(([id,status])=>!oldIds.has(id)&&status==="pending")){xpToast("🎁 Antrag gesendet – deine Lehrkraft prüft ihn.");xpCelebrate("small")}
+  }
+  previousLiveState=now;
+}
+
+function xpRenderStudentExperience(){
+  xpRenderProfile();
+  if(isTeacher()||!currentClassId)return;
+  if($("dashboardTitle"))$("dashboardTitle").textContent=`Schön, dass du wieder da bist, ${String(profile?.display_name||"").split(" ")[0]||"!"} 👋`;
+  if($("dashboardSubtitle"))$("dashboardSubtitle").textContent="Bleib dran – kleine Schritte, große Wirkung.";
+  const streak=Number(currentState?.streak||0);if($("streakHint"))$("streakHint").textContent=streak>=5?"Starke Serie – fünf gute Doppelstunden oder mehr!":streak>=3?"Du bist im Lauf – bleib dran!":"Bleib dran – kleine Schritte zählen.";
+  xpRenderHero();xpRenderActivity();xpRenderToday();xpLiveChanges();xpMaybeNews();xpMaybeSeason();
+}
+
+const xpOriginalRenderDashboard=renderDashboard;
+renderDashboard=function(){xpOriginalRenderDashboard();xpRenderStudentExperience()};
+
+const xpOriginalRenderShop=renderShop;
+renderShop=function(){xpOriginalRenderShop();xpRenderShopAlmost();xpEnhanceShopCards()};
+
+const xpOriginalRenderRewards=renderRewards;
+renderRewards=function(){xpOriginalRenderRewards();xpRenderJourney()};
+
+const xpOriginalOpenShopModal=openShopModal;
+openShopModal=function(itemId){
+  xpOriginalOpenShopModal(itemId);
+  const item=(shopState.items||[]).find(i=>Number(i.id)===Number(itemId));if(!item||!$("shopModalPreview"))return;
+  const balance=xpBalance(item),remaining=Math.max(0,Number(item.cost||0)-balance),req=xpRequestFor(item);
+  $("shopModalPreview").innerHTML=`<div class="shop-preview-price"><span>Dein Guthaben</span><strong>${balance} ✦</strong></div><div class="shop-preview-price"><span>Kosten</span><strong>${item.cost} ✦</strong></div><div class="shop-preview-wide"><div class="shop-progress-row"><span>Fortschritt</span><span>${remaining?`Noch ${remaining} Punkt${remaining===1?"":"e"}`:"Bereit zum Einlösen"}</span></div><div class="mini-progress"><i style="width:${xpProgress(item)}%"></i></div></div>`;
+  const blocked=req&&["pending","approved","redeemed"].includes(req.status);
+  if($("submitShopRequestBtn")){
+    $("submitShopRequestBtn").disabled=blocked||!shopItemEligible(item);
+    $("submitShopRequestBtn").textContent=blocked?xpStatus(req.status):(shopItemEligible(item)?"Belohnung beantragen":"Noch nicht verfügbar");
+  }
+};
+
+if($("closeNewsModalBtn"))$("closeNewsModalBtn").onclick=xpCloseNews;
+if($("newsContinueBtn"))$("newsContinueBtn").onclick=xpCloseNews;
+if($("closeSeasonModalBtn"))$("closeSeasonModalBtn").onclick=()=>$("seasonModal").classList.add("hidden");
+document.querySelectorAll("[data-jump-history]").forEach(btn=>btn.onclick=()=>showPage("history"));
+
 init();
+
+
+/* Premium motion: delegated clicks, no changes to account or point logic. */
+(() => {
+ const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+ document.addEventListener('click',event=>{
+  if(reduced.matches)return;
+  const button=event.target.closest('button');
+  if(!button||button.disabled)return;
+  const box=button.getBoundingClientRect(),size=Math.max(box.width,box.height);
+  const ripple=document.createElement('span');ripple.className='motion-ripple';ripple.setAttribute('aria-hidden','true');
+  const x=event.detail?event.clientX-box.left:box.width/2,y=event.detail?event.clientY-box.top:box.height/2;
+  Object.assign(ripple.style,{width:size+'px',height:size+'px',left:(x-size/2)+'px',top:(y-size/2)+'px'});
+  button.appendChild(ripple);ripple.addEventListener('animationend',()=>ripple.remove(),{once:true});setTimeout(()=>ripple.remove(),900);
+ });
+ const ids=['myPoints','myBonusBalance','classPoints','shopPersonalBalance','shopClassBalance'];
+ ids.forEach(id=>{const element=document.getElementById(id);if(!element)return;let previous=element.textContent;
+  new MutationObserver(()=>{const current=element.textContent;if(current===previous)return;previous=current;if(reduced.matches)return;element.classList.remove('premium-flash');requestAnimationFrame(()=>element.classList.add('premium-flash'));}).observe(element,{childList:true,characterData:true,subtree:true});
+ });
+})();
