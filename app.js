@@ -617,3 +617,53 @@ init();
   new MutationObserver(()=>{const current=element.textContent;if(current===previous)return;previous=current;if(reduced.matches)return;element.classList.remove('premium-flash');requestAnimationFrame(()=>element.classList.add('premium-flash'));}).observe(element,{childList:true,characterData:true,subtree:true});
  });
 })();
+
+/* Landheim Plus 2.0 vector design and homework bonus action. */
+const lpPaths={
+ home:'<path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-7h6v7"/>',
+ users:'<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 3 5v2"/>',
+ target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+ gift:'<path d="M3 8h18v5H3zM5 13v8h14v-8M12 8v13"/><path d="M12 8C3 8 6 0 10 4l2 4c9 0 6-8 2-4z"/>',
+ bag:'<path d="M5 7h14l2 14H3zM8 7V5a4 4 0 0 1 8 0v2"/>',
+ trophy:'<path d="M7 3h10v6a5 5 0 0 1-10 0zM7 5H3v3a4 4 0 0 0 5 4m9-7h4v3a4 4 0 0 1-5 4M12 14v5m-5 2h10m-8-2h6"/>',
+ star:'<path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/>',
+ medal:'<path d="m5 2 4 8m10-8-4 8M8 2l4 7 4-7"/><circle cx="12" cy="15" r="6"/><path d="m12 11 1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.2-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z"/>',
+ book:'<path d="M12 5C9 3 5 3 2 4v15c4-1 7-1 10 1 3-2 6-2 10-1V4c-3-1-7-1-10 1zm0 0v15"/>',
+ message:'<path d="M3 4h18v13H8l-5 4zM7 8h10m-10 4h7"/>',
+ check:'<path d="m5 12 4 4L19 6"/>',
+ heart:'<path d="M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-5 5 2 11 8 15 6-4 13-10 8-15z"/>',
+ lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v2"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+ gear:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/>',
+ archive:'<rect x="3" y="3" width="18" height="5" rx="1"/><path d="M5 8v13h14V8m-10 5h6"/>',
+ bolt:'<path d="m13 2-9 12h7l-1 8 10-13h-7z"/>',
+ screen:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4m-5 0h10"/>',
+ music:'<path d="M9 18V5l11-3v13M9 8l11-3"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="15" rx="3" ry="2"/>',
+ logout:'<path d="M9 4H3v16h6m4-8h9m-4-4 4 4-4 4"/>',
+ flame:'<path d="M12 2c2 6 8 8 7 14-1 7-13 8-14 0-1-4 2-7 4-9 0 4 1 5 3 5 2-2 2-5 0-10z"/>',
+ diamond:'<path d="m3 8 4-5h10l4 5-9 14zM3 8h18M7 3l5 19 5-19"/>'
+};
+function lpIcon(name){return `<svg class="lp-icon" viewBox="0 0 24 24" aria-hidden="true">${lpPaths[name]||lpPaths.star}</svg>`}
+const lpEmoji={'🏠':'home','👥':'users','🎯':'target','🎁':'gift','🛍️':'bag','🏆':'trophy','⭐':'star','🌟':'star','✦':'star','🥇':'medal','🥈':'medal','🥉':'medal','💎':'diamond','💬':'message','🤝':'users','♥':'heart','❤️':'heart','🔒':'lock','🔐':'lock','🕘':'clock','⚙️':'gear','🗄️':'archive','⚡':'bolt','📺':'screen','🎵':'music','🗳️':'check','↪':'logout','🔥':'flame','👋':'users','📖':'book','✅':'check','🎉':'star','🪑':'archive','📚':'book','📝':'book','🎮':'target','🍕':'gift','🍿':'gift','🎬':'screen'};
+const lpPattern=new RegExp(Object.keys(lpEmoji).sort((a,b)=>b.length-a.length).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'gu');
+function lpPolish(root){
+ if(!(root instanceof Element)||root.closest('svg,script,style,textarea,input,select,option,[contenteditable]'))return;
+ const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];
+ while(walker.nextNode()){const n=walker.currentNode;if(n.parentElement.closest('svg,script,style,textarea,select,option,[contenteditable]'))continue;lpPattern.lastIndex=0;if(lpPattern.test(n.nodeValue))nodes.push(n)}
+ nodes.forEach(n=>{const text=n.nodeValue,fragment=document.createDocumentFragment();let offset=0;lpPattern.lastIndex=0;for(const m of text.matchAll(lpPattern)){fragment.append(text.slice(offset,m.index));const span=document.createElement('span');span.className='lp-icon-wrap';span.innerHTML=lpIcon(lpEmoji[m[0]]);fragment.append(span);offset=m.index+m[0].length}fragment.append(text.slice(offset));n.replaceWith(fragment)});
+}
+let lpPolishQueued=false;
+new MutationObserver(records=>{if(lpPolishQueued||!records.some(r=>r.type==='characterData'||[...r.addedNodes].some(n=>n.nodeType===3||(n.nodeType===1&&!n.matches('.lp-icon-wrap,svg')))))return;lpPolishQueued=true;requestAnimationFrame(()=>{lpPolishQueued=false;lpPolish(document.getElementById('app'))})}).observe(document.getElementById('app'),{subtree:true,childList:true,characterData:true});
+lpPolish(document.getElementById('app'));
+const lpOriginalStudents=renderStudents;
+renderStudents=function(){lpOriginalStudents();document.querySelectorAll('#studentCards .student').forEach(card=>{const user=card.querySelector('.quickBtn')?.dataset.user;if(!user)return;const button=document.createElement('button');button.className='homework-award';button.innerHTML=`<span>${lpIcon('book')} Hausaufgaben / Wayground</span><strong>+1 Bonus</strong>`;button.title='Zusätzlicher Shop-Bonuspunkt; unabhängig vom Wochenlimit';button.onclick=()=>lpAwardHomework(user,button);const actions=card.querySelector('.account-actions');actions.before(button);const caption=document.createElement('p');caption.className='homework-caption';caption.textContent='Shop-Guthaben · zusätzlich zu den Individualpunkten';button.after(caption)});lpPolish(document.getElementById('studentCards'))};
+const lpPendingAwards=new Map();
+async function lpAwardHomework(user,button){
+ if(button.disabled)return;button.disabled=true;
+ const key=currentClassId+':'+user;
+ if(!lpPendingAwards.has(key))lpPendingAwards.set(key,crypto.randomUUID());
+ try{const {error}=await supabaseClient.rpc('award_homework_bonus',{p_class:currentClassId,p_student:user,p_request:lpPendingAwards.get(key)});
+ if(error){xpToast(error.code==='PGRST202'?'Bitte zuerst das Wayground-SQL-Update ausführen.':error.message,'info');return}
+ lpPendingAwards.delete(key);xpToast('+1 Bonuspunkt für Hausaufgaben / Wayground');xpCelebrate('small');await loadCurrentClass();
+ }catch(e){xpToast('Verbindung fehlgeschlagen. Erneut anklicken versucht dieselbe Vergabe.','info')}finally{button.disabled=false}
+}
