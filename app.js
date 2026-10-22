@@ -364,7 +364,7 @@ function renderHistory(){
   if(!$("historyList"))return;const reversedInd=new Set(pointEvents.filter(e=>e.reverses_event_id).map(e=>Number(e.reverses_event_id))),reversedClass=new Set(classEvents.filter(e=>e.reverses_event_id).map(e=>Number(e.reverses_event_id)));let items=[];
   if(historyMode!=="class")items.push(...pointEvents.map(e=>({kind:"individual",id:e.id,when:e.created_at,delta:e.delta,title:isTeacher()?memberName(e.recipient_user_id):"Mein Pluspunkt",sub:`${e.category}${e.note?" · "+e.note:""}`,reversed:reversedInd.has(Number(e.id)),reversal:!!e.reverses_event_id})));
   if(historyMode!=="individual")items.push(...classEvents.map(e=>({kind:"class",id:e.id,when:e.created_at,delta:e.delta,title:"Klassenpunkt",sub:`${e.reason||"Doppelstunde"}${e.note?" · "+e.note:""}`,reversed:reversedClass.has(Number(e.id)),reversal:!!e.reverses_event_id})));
-  items.sort((a,b)=>new Date(b.when)-new Date(a.when));$("historySubtitle").textContent=isTeacher()?"Alle Punkte bleiben nachvollziehbar; Fehlvergaben werden als Korrektur dokumentiert.":"Du siehst deine eigenen Pluspunkte und den gemeinsamen Klassenverlauf.";$("historyList").innerHTML=items.slice(0,120).map(i=>`<div class="history-item ${i.delta<0?"negative":""}"><div class="history-icon">${i.kind==="class"?"👥":(i.delta>0?"＋":"↩")}</div><div class="history-main"><strong>${escapeHtml(i.title)} · ${i.delta>0?"+1":"−1"}</strong><small>${escapeHtml(i.sub)}</small></div><div class="history-side">${new Date(i.when).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"})}${isTeacher()&&i.delta>0&&!i.reversed?`<button class="undoBtn" data-kind="${i.kind}" data-id="${i.id}">Korrigieren</button>`:""}</div></div>`).join("")||'<div class="card">Noch kein Verlauf vorhanden.</div>';document.querySelectorAll(".undoBtn").forEach(b=>b.onclick=()=>undoEvent(b.dataset.kind,b.dataset.id));
+  items.sort((a,b)=>new Date(b.when)-new Date(a.when));$("historySubtitle").textContent=isTeacher()?"Alle Punkte bleiben nachvollziehbar; Fehlvergaben werden als Korrektur dokumentiert.":"Du siehst deine eigenen Pluspunkte und den gemeinsamen Klassenverlauf.";$("historyList").innerHTML=items.slice(0,120).map(i=>`<div class="history-item ${i.delta<0?"negative":""}"><div class="history-icon">${i.kind==="class"?"👥":(i.delta>0?"＋":"↩")}</div><div class="history-main"><strong>${escapeHtml(i.title)} · ${(i.delta>0?"+":"")+i.delta}</strong><small>${escapeHtml(i.sub)}</small></div><div class="history-side">${new Date(i.when).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"})}${isTeacher()&&i.delta>0&&!i.reversed?`<button class="undoBtn" data-kind="${i.kind}" data-id="${i.id}">Korrigieren</button>`:""}</div></div>`).join("")||'<div class="card">Noch kein Verlauf vorhanden.</div>';document.querySelectorAll(".undoBtn").forEach(b=>b.onclick=()=>undoEvent(b.dataset.kind,b.dataset.id));
 }
 $("historyFilter").onchange=e=>{historyMode=e.target.value;renderHistory()};
 async function undoEvent(kind,id){if(!confirm("Diesen Punkt als Fehlvergabe korrigieren? Der ursprüngliche Eintrag bleibt im Verlauf sichtbar."))return;const fn=kind==="class"?"reverse_class_point":"reverse_individual_point",args=kind==="class"?{p_event_id:Number(id),p_note:"Korrektur"}:{p_event_id:Number(id),p_note:"Korrektur"};const {error}=await supabaseClient.rpc(fn,args);if(error)alert(error.message);else await loadCurrentClass()}
@@ -551,8 +551,8 @@ function xpLiveChanges(){
   const reqs=Object.fromEntries((shopState.requests||[]).map(r=>[String(r.id),r.status]));
   const now={points:Math.max(0,sum(pointEvents)),classPoints:classPoints(),unlocked:(rewards||[]).filter(r=>r.unlocked).length,requests:reqs};
   if(previousLiveState){
-    if(now.points>previousLiveState.points){xpToast("+1 Individualpunkt – stark gemacht!");xpCelebrate("small")}
-    if(now.classPoints>previousLiveState.classPoints)xpToast("+1 Klassenpunkt – gemeinsam weiter!","info");
+    if(now.points>previousLiveState.points){xpToast(`+${now.points-previousLiveState.points} Entwicklungspunkte – stark gemacht!`);xpCelebrate("small")}
+    if(now.classPoints>previousLiveState.classPoints)xpToast(`+${now.classPoints-previousLiveState.classPoints} Klassenpunkte – gemeinsam weiter!`,"info");
     if(now.unlocked>previousLiveState.unlocked){xpToast("Neue Klassenfreischaltung! 🎁");xpCelebrate("medium")}
     const oldIds=new Set(Object.keys(previousLiveState.requests||{}));
     if(Object.entries(reqs).some(([id,status])=>!oldIds.has(id)&&status==="pending")){xpToast("🎁 Antrag gesendet – deine Lehrkraft prüft ihn.");xpCelebrate("small")}
@@ -799,13 +799,13 @@ function l8Status(text,error=false){let el=$('l8LoadStatus');if(!el){el=document
 loadCurrentClass=async function(){const seq=++l8Load,cls=currentClassId,uid=profile?.id;if(!cls){document.body.classList.remove('l8-class-loading');l8Data=null;l8Class=null;$('l8TeacherLessons')?.remove();$('noClass').classList.remove('hidden');$('dashboardBody').classList.add('hidden');$('noClassText').textContent='Dein Konto ist noch keiner aktiven Klasse zugeordnet.';return}
  const same=l8Class===cls&&l8Data?.viewer===uid;if(!same){document.body.classList.add('l8-class-loading');l8Data=null;l8Lesson=null;$('dashboardBody').classList.add('hidden');$('studentCards').replaceChildren();$('l8TeacherLessons')?.remove();$('shopItemGrid').replaceChildren();}
  l8Status('Punkte werden geladen …');
- try{if(isTeacher()){const r=await supabaseClient.rpc('lp9_ensure_all',{p_class:cls});if(r.error)throw r.error;}const {data,error}=await supabaseClient.rpc('lp9_snapshot',{p_class:cls});if(error)throw error;if(seq!==l8Load||currentClassId!==cls||profile?.id!==uid)return;if(!data||(data.version!==8||data.calendar_version!==9)||!Array.isArray(data.points)||!Array.isArray(data.bonus)||!data.shop)throw new Error('Unvollständige Antwort der Datenbank.');
+ try{if(isTeacher()){const r=await supabaseClient.rpc('lp9_ensure_all',{p_class:cls});if(r.error)throw r.error;}const {data,error}=await supabaseClient.rpc('lp10_snapshot',{p_class:cls});if(error)throw error;if(seq!==l8Load||currentClassId!==cls||profile?.id!==uid)return;if(!data||(data.version!==8||data.calendar_version!==9||data.history_version!==10)||!Array.isArray(data.points)||!Array.isArray(data.bonus)||!data.shop)throw new Error('Unvollständige Antwort der Datenbank.');
  document.body.classList.remove('l8-class-loading');l8Data={...data,viewer:uid};l8Class=cls;currentState=data.state;pointEvents=data.points;classEvents=data.classEvents;platinumAwards=data.platinum;focusGoals=data.goals;members=data.members;shopState=data.shop;shopClassmates=data.classmates;rewards=data.rewards;l8LastLoad=Date.now();
  if(!l8Selected())l8Lesson=data.lessons.find(x=>x.status==='open')?.id||null;
  $('noClass').classList.add('hidden');$('dashboardBody').classList.remove('hidden');$('className').textContent=activeClass()?.name||'';$('classSelect').value=cls;
  renderDashboard();if(isTeacher()){renderStudents();renderGoalsPage()}renderShop();renderRewards();renderManage();renderHistory();renderArchive();l8TeacherLessons();
  l8Status('Aktueller Stand · '+new Date(data.loaded_at).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}));return true;
- }catch(e){if(seq!==l8Load)return;const detail=e.code==='PGRST202'?'Bitte zuerst UPDATE_9.sql in Supabase ausführen.':e.message||'Verbindung fehlgeschlagen.';l8Status((same?'Der angezeigte Stand konnte nicht aktualisiert werden. ':'Punkte konnten nicht geladen werden. ')+detail,true);}
+ }catch(e){if(seq!==l8Load)return;const detail=e.code==='PGRST202'?'Bitte zuerst UPDATE_11.sql in Supabase ausführen.':e.message||'Verbindung fehlgeschlagen.';l8Status((same?'Der angezeigte Stand konnte nicht aktualisiert werden. ':'Punkte konnten nicht geladen werden. ')+detail,true);}
 };
 const l8OriginalLoadClasses=loadClasses;
 loadClasses=async function(){currentClassId=null;return l8OriginalLoadClasses()};
@@ -869,11 +869,12 @@ l8TeacherLessons=function(){
  panel.innerHTML=`<div class="l8-section-head"><div><div class="eyebrow">${l8Data.week_type?l8Data.week_type+'-Woche · ':''}${l9Date(l8Today())}</div><h2>Offene Unterrichte <span class="l8-count">${open.length}</span></h2></div><button id="l8Refresh">Aktualisieren</button></div>
  <p class="l8-subtle">Alle eingerichteten Klassen · älteste Stunde zuerst. Punkte vergeben, dann abschließen.</p>
  ${open.length?`<div class="l8-open-list">${open.map(l=>`<div class="l8-lesson-row ${l.id===sel?.id?'selected':''}"><div><strong>${escapeHtml(l.class_name)} · ${l8Label(l)}</strong><small>${l.id===sel?.id?'Für die Punktevergabe ausgewählt':'Noch zu bearbeiten'}</small></div><div><button data-lesson="${l.id}" data-class="${l.class_id}">${l.id===sel?.id?'Ausgewählt':'Bearbeiten'}</button>${l.class_id===currentClassId?`<button class="primary" data-close="${l.id}">Abschließen</button><button data-skip="${l.id}">Entfallen</button>`:''}</div></div>`).join('')}</div>`:'<p class="l8-empty">Keine offenen Stunden vorhanden.</p>'}
- ${!s?'<p class="l9-hint">Für diese Klasse bitte unten einmal die passende Stundenplangruppe auswählen und speichern.</p>':''}
+ ${!s?'<p class="l9-hint">Der Klassenname konnte noch keinem Stundenplan eindeutig zugeordnet werden. Bitte einmal unten auswählen.</p>':''}
  ${l8Data.day_note?`<p class="l9-hint">Heute: ${escapeHtml(l8Data.day_note)}</p>`:''}
  ${l8Today()>l8Data.calendar_until?'<p class="l9-hint">Der hinterlegte Kalender endet am 28.07.2027. Für das neue Schuljahr muss ein neuer Kalender eingespielt werden.</p>':''}
+ ${l8Data.backfill?`<p class="l8-subtle">${l8Data.backfill.assigned} frühere Vergaben dem letzten Unterricht vor der Buchung zugeordnet (ungefähr).${l8Data.backfill.unassigned?' '+l8Data.backfill.unassigned+' Vergaben ohne passende Zuordnung.':''} Zum Berechnen von Serienboni die offenen Stunden abschließen.</p>`:''}
  <div class="l9-upcoming"><h3>Nächste Termine · ${name}</h3>${upcoming.length?upcoming.map(l=>`<div class="l9-date-row"><span>${l8Label(l)}</span>${l.calendar_note?`<small>${escapeHtml(l.calendar_note)}</small>`:''}</div>`).join(''):`<p class="l8-subtle">${s?'In den nächsten fünf Wochen keine weiteren geplanten Termine.':'Nach dem Speichern erscheinen hier die nächsten Termine.'}</p>`}</div>
- <details${!s?' open':''}><summary>A-/B-Stundenplan · ${name}</summary><div class="l8-form"><label>Stundenplangruppe<select id="l9Preset"><option value="">Bitte wählen</option>${Object.entries(l9Groups).map(([k,p])=>`<option value="${k}"${key===k?' selected':''}>${escapeHtml(p.label)}</option>`).join('')}</select></label><label>Stunden erfassen ab<input type="date" id="l9Start" min="2026-09-16" max="2027-07-28" value="${s?.starts_on||(l8Today()<'2026-09-16'?'2026-09-16':l8Today()>'2027-07-28'?'2027-07-28':l8Today())}"></label><button id="l9Save" class="primary">Stundenplan speichern</button></div><p id="l9Preview" class="l8-subtle">${l9Preview(key)}</p><p class="l8-subtle">Die Gruppenauswahl ordnet nur die Zeiten zu. Fächer werden gemeinsam gezählt. Ferien, Feiertage und früher Schulschluss aus dem Landheim-Kalender werden berücksichtigt. Sonderveranstaltungen und individuelle Ausfälle bitte selbst als „Entfallen“ markieren. Neue Stunden erscheinen ab Unterrichtsbeginn.</p><p class="l8-subtle">Bereits erfasste Stunden behalten ihr Datum und ihre Punkte. Bei abweichenden alten Terminen diese einzeln prüfen. Das Startdatum legt fest, wie weit offene Stunden nachgetragen werden.</p></details>
+ <details${!s?' open':''}><summary>Unterrichtszeiten ansehen / ändern · ${name}</summary><div class="l8-form"><label>Stundenplangruppe<select id="l9Preset"><option value="">Bitte wählen</option>${Object.entries(l9Groups).map(([k,p])=>`<option value="${k}"${key===k?' selected':''}>${escapeHtml(p.label)}</option>`).join('')}</select></label><label>Stunden erfassen ab<input type="date" id="l9Start" min="2026-09-16" max="2027-07-28" value="${s?.starts_on||(l8Today()<'2026-09-16'?'2026-09-16':l8Today()>'2027-07-28'?'2027-07-28':l8Today())}"></label><button id="l9Save" class="primary">Stundenplan speichern</button></div><p id="l9Preview" class="l8-subtle">${l9Preview(key)}</p><p class="l8-subtle">Die Gruppenauswahl ordnet nur die Zeiten zu. Fächer werden gemeinsam gezählt. Ferien, Feiertage und früher Schulschluss aus dem Landheim-Kalender werden berücksichtigt. Sonderveranstaltungen und individuelle Ausfälle bitte selbst als „Entfallen“ markieren. Neue Stunden erscheinen ab Unterrichtsbeginn.</p><p class="l8-subtle">Bereits erfasste Stunden behalten ihr Datum und ihre Punkte. Bei abweichenden alten Terminen diese einzeln prüfen. Das Startdatum legt fest, wie weit offene Stunden nachgetragen werden.</p></details>
  <details><summary>Stunde manuell nachtragen</summary><div class="l8-form"><label>Datum<input type="date" id="l8Date" value="${l8Today()}" max="${l8Today()}"></label><label>Terminfeld<select id="l8Slot"><option value="1">Termin 1</option><option value="2">Termin 2</option></select></label><button id="l8Add">Stunde anlegen</button></div><p class="l8-subtle">Für zusätzliche oder abweichende Termine. Ein bereits belegtes Terminfeld wird nicht überschrieben.</p></details>
  <details><summary>Abgeschlossene / entfallene Stunden · ${name} (${closed.length})</summary>${closed.map(l=>`<div class="l8-lesson-row"><div><strong>${l8Label(l)}</strong><small>${l.status==='closed'?'Abgeschlossen':'Entfallen'}</small></div><button data-reopen="${l.id}">Wieder öffnen</button></div>`).join('')||'<p>Noch keine abgeschlossenen Stunden.</p>'}</details>`;
  $('l8Refresh').onclick=()=>loadCurrentClass();panel.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>l9Choose(b.dataset.lesson,b.dataset.class));
@@ -892,14 +893,137 @@ l8Calendar=function(id){let monday=l8Date(l8Monday(l8Today()));monday.setUTCDate
  let state='planned',label=l8Data.ab_schedule?'Kein geplanter Termin':'Nicht erfasst',icon='–';
  if(l){state=l.status==='skipped'?'skipped':!member?'planned':n>0?'earned':l.status==='open'?'open':'missed';label=l.status==='skipped'?'Entfallen':!member?'Nicht zugeordnet':n>0?`${n} Entwicklungspunkt${n===1?'':'e'}${l.status==='open'?' · noch offen':''}`:l.status==='open'?'Noch offen':'Kein Entwicklungspunkt';icon=state==='earned'?lpIcon('star'):state==='open'?'○':'–'}
  else if(p){label='Geplant · noch nicht zur Auswertung erfasst';icon='◷'}
+ const inferred=!!l&&pointEvents.some(e=>e.recipient_user_id===id&&e.lesson_id===l.id&&e.lp10_inferred);if(inferred)label+=' · nachgetragen (Datum ungefähr)';
  const detail=(shown?l8Label(shown)+' · ':'')+label;
- return `<td><span class="l8-star ${state}" tabindex="0" title="${escapeHtml(detail)}" aria-label="${escapeHtml(detail)}">${icon}</span><small>${shown?l8Format(shown.lesson_date):'–'}${shown?.starts_at?'<br>'+l9Time(shown.starts_at):''}</small></td>`;
+ return `<td><span class="l8-star ${state}" tabindex="0" title="${escapeHtml(detail)}" aria-label="${escapeHtml(detail)}">${icon}</span><small>${shown?l8Format(shown.lesson_date):'–'}${shown?.starts_at?'<br>'+l9Time(shown.starts_at):''}${inferred?'<br>nachgetragen':''}</small></td>`;
  }).join('');
  rows.push(`<tr${w===3?' class="l8-current"':''}><th scope="row">KW ${kw.week}<small>${kw.year}${kind?' · '+kind+'-Woche':''}${w===3?' · aktuell':''}</small></th>${cells}</tr>`);monday.setUTCDate(monday.getUTCDate()+7);
  }
- return `<table class="l8-calendar"><caption>Deine letzten vier Kalenderwochen</caption><thead><tr><th>Woche</th><th>Termin 1</th><th>Termin 2</th></tr></thead><tbody>${rows.join('')}</tbody></table><p class="l8-subtle">Stern = Entwicklungspunkt · Kreis = offen · Uhr = geplant · Strich = kein Punkt oder kein Termin. Details beim Antippen. Bei einer Doppelstunde pro Woche bleibt das zweite Feld frei.</p>`;
+ return `<table class="l8-calendar"><caption>Deine letzten vier Kalenderwochen</caption><thead><tr><th>Woche</th><th>Termin 1</th><th>Termin 2</th></tr></thead><tbody>${rows.join('')}</tbody></table><p class="l8-subtle">Stern = Entwicklungspunkt · Kreis = offen · Uhr = geplant · Strich = kein Punkt oder kein Termin. Nachgetragen = ungefähr dem letzten Unterricht vor der Buchung zugeordnet. Details beim Antippen. Bei einer Doppelstunde pro Woche bleibt das zweite Feld frei.</p>`;
 };
 const l9Dashboard=renderDashboard;
-renderDashboard=function(){l9Dashboard();if(isTeacher()||!l8Data)return;let card=$('l9Next');if(!card){card=document.createElement('article');card.id='l9Next';card.className='card l9-upcoming';$('l8Calendar')?.after(card)}const upcoming=l9Upcoming();card.innerHTML=`<h3>Nächster Unterricht</h3>${upcoming.length?`<strong>${escapeHtml(activeClass()?.name||'')} · ${l8Label(upcoming[0])}</strong>`:'<p>Aktuell kein weiterer Termin in den nächsten fünf Wochen geplant.</p>'}`};
+renderDashboard=function(){l9Dashboard();if(isTeacher()||!l8Data)return;let card=$('l9Next');if(!card){card=document.createElement('article');card.id='l9Next';card.className='card l9-upcoming';$('l8Calendar')?.after(card)}const upcoming=l9Upcoming();card.innerHTML=`<div class="eyebrow">Heute: ${l9Date(l8Today())} · KW ${l8KW(l8Today()).week}</div><h3>Nächster Unterricht</h3>${upcoming.length?`<strong>${escapeHtml(activeClass()?.name||'')} · ${l8Label(upcoming[0])}</strong>`:'<p>Aktuell kein weiterer Termin in den nächsten fünf Wochen geplant.</p>'}`};
+
+
+l8Format=function(s){return new Intl.DateTimeFormat('de-DE',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric'}).format(l8Date(s))};
+// Update 11: navigation independent of loading; single-class snapshots and bounded requests.
+let l11Page='dashboard',l11ClassOwner=null,l11Fresh=false;
+function l11Ready(){return !!l8Data&&l8Class===currentClassId&&l8Data.viewer===profile?.id}
+function l11CloseModals(){document.querySelectorAll('.modal-back').forEach(x=>x.classList.add('hidden'));accountStudentId=null;goalEditorStudentId=null;shopModalItemId=null;l3CloseTip()}
+function l11Timeout(work,ms=20000){let timer;return Promise.race([Promise.resolve(work),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Die Verbindung antwortet nicht. Bitte erneut laden.')),ms)})]).finally(()=>clearTimeout(timer))}
+function l11ClearClass(){
+ l8Data=null;l8Class=null;l8Lesson=null;l11Fresh=false;currentState=null;members=[];pointEvents=[];classEvents=[];platinumAwards=[];focusGoals=[];rewards=[];shopClassmates=[];shopState={personal_balance:0,class_balance:0,tier_rank:0,items:[],requests:[]};
+ previousLiveState=null;pendingSeenSnapshot=null;l11CloseModals();
+ for(const id of ['studentCards','historyList','l8LearningHistory','shopItemGrid','shopRequestList','goalStudentGrid','rewardGrid'])$(id)?.replaceChildren();
+ for(const id of ['l8TeacherLessons','l11LessonPicker','l8Earned','l8Calendar','l9Next','wishCard'])$(id)?.remove();
+ $('dashboardBody').classList.add('hidden');document.body.classList.add('l11-no-data');
+}
+function l11Render(){
+ const failures=[];
+ for(const [name,fn] of [['Übersicht',renderDashboard],['Schüler',()=>{if(isTeacher())renderStudents()}],['Ziele',()=>{if(isTeacher())renderGoalsPage()}],['Shop',renderShop],['Freischaltungen',renderRewards],['Verwaltung',renderManage],['Verlauf',renderHistory],['Archiv',renderArchive],['Unterricht',l8TeacherLessons]]){
+  try{fn()}catch(e){console.error(name,e);failures.push(name)}
+ }
+ l11LessonPicker();
+ if(failures.length)throw new Error('Darstellung fehlgeschlagen: '+failures.join(', ')+'. Bitte erneut laden.');
+}
+loadCurrentClass=async function(){
+ const seq=++l8Load,cls=currentClassId,uid=profile?.id,same=l11Ready();
+ if(!same)l11ClearClass();
+ $('className').textContent=activeClass()?.name||'';$('classSelect').value=cls||'';
+ if(!cls){document.body.classList.remove('l8-class-loading');$('noClass').classList.remove('hidden');$('noClassText').textContent='Noch keine aktive Klasse zugeordnet.';l8Status(isTeacher()?'Unter Verwaltung kannst du eine Klasse anlegen.':'Bitte einer Klasse beitreten.');renderArchive();return false}
+ l11Fresh=false;document.body.classList.add('l8-class-loading');l8Status('Daten für '+(activeClass()?.name||'die Klasse')+' werden geladen …');
+ const valid=()=>seq===l8Load&&currentClassId===cls&&profile?.id===uid;
+ try{
+  if(isTeacher()){const r=await l11Timeout(supabaseClient.rpc('lp9_ensure_all',{p_class:cls}),30000);if(r.error)throw r.error;if(!valid())return false}
+  const {data,error}=await l11Timeout(supabaseClient.rpc('lp10_snapshot',{p_class:cls}));if(error)throw error;if(!valid())return false;
+  if(!data||data.version!==8||data.calendar_version!==9||data.history_version!==10||!data.state||!data.shop||!['points','bonus','lessons','roster','classEvents','platinum','goals','members','classmates','rewards','planned','teacher_open'].every(k=>Array.isArray(data[k])))throw new Error('Datenbankantwort unvollständig. Bitte UPDATE_11.sql vollständig ausführen.');
+  l8Data={...data,viewer:uid};l8Class=cls;currentState=data.state;pointEvents=data.points;classEvents=data.classEvents;platinumAwards=data.platinum;focusGoals=data.goals;members=data.members;shopState=data.shop;shopClassmates=data.classmates;rewards=data.rewards;l8LastLoad=Date.now();
+  if(!l8Selected())l8Lesson=data.lessons.find(x=>x.status==='open')?.id||null;
+  $('noClass').classList.add('hidden');$('dashboardBody').classList.remove('hidden');document.body.classList.remove('l11-no-data');
+  l11Render();l11Fresh=true;
+  l8Status('Aktueller Stand · '+new Date(data.loaded_at).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}));return true;
+ }catch(e){if(!valid())return false;const detail=e.code==='PGRST202'?'Bitte UPDATE_11.sql in Supabase vollständig ausführen.':e.message||'Verbindung fehlgeschlagen.';
+  l8Status((same?'Stand konnte nicht aktualisiert werden. ':'Daten konnten nicht geladen werden. ')+detail,true);return false;
+ }finally{if(valid()){document.body.classList.remove('l8-class-loading');$('classSelect').disabled=l8Busy}}
+};
+loadClasses=async function(){
+ const uid=profile?.id;if(l11ClassOwner!==uid){currentClassId=null;classes=[];archivedClasses=[];$('classSelect').replaceChildren();l11ClassOwner=uid;l11ClearClass()}
+ try{
+  let data,error;if(isTeacher())({data,error}=await l11Timeout(supabaseClient.from('classes').select('*').eq('teacher_id',uid).order('name')));else({data,error}=await l11Timeout(supabaseClient.rpc('get_my_classes')));
+  if(error)throw error;if(profile?.id!==uid)return;
+  classes=(data||[]).filter(c=>!c.archived_at);archivedClasses=isTeacher()?(data||[]).filter(c=>!!c.archived_at):[];
+  $('classSelect').innerHTML=classes.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if(!classes.some(c=>c.id===currentClassId))currentClassId=classes[0]?.id||null;
+  const join=document.querySelector('.nav[data-target="join"]');if(join)join.classList.toggle('hidden',isTeacher()||classes.length>0);
+  renderArchive();return await loadCurrentClass();
+ }catch(e){l8Status('Klassen konnten nicht geladen werden. '+(e.message||''),true);document.body.classList.remove('l8-class-loading');return false}
+};
+$('classSelect').onchange=async e=>{if(l8Busy){e.target.value=currentClassId||'';return}currentClassId=e.target.value;l11CloseModals();await loadCurrentClass()};
+showPage=function(id){
+ const page=$(id);if(!page?.classList.contains('page'))return;
+ if(!isTeacher()&&['students','goals','manage','archive'].includes(id))return;
+ l3CloseTip();l11Page=id;document.querySelectorAll('.page').forEach(p=>p.classList.toggle('hidden',p.id!==id));document.querySelectorAll('.nav[data-target]').forEach(b=>{b.classList.toggle('active',b.dataset.target===id);if(b.dataset.target===id)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+ try{
+  if(id==='archive')renderArchive();
+  if(l11Ready()){const fn={students:renderStudents,goals:renderGoalsPage,shop:renderShop,rewards:renderRewards,history:renderHistory,manage:renderManage}[id];if(fn)fn();if(id==='students')l11LessonPicker()}
+ }catch(e){console.error(e);l8Status('Diese Ansicht konnte nicht vollständig angezeigt werden: '+(e.message||''),true)}
+ page.scrollIntoView({block:'start',behavior:'auto'});
+ if(profile&&!isTeacher()&&Date.now()-l8LastLoad>15000&&!l8Busy&&!document.body.classList.contains('l8-class-loading'))loadCurrentClass();
+};
+const l11TeacherLessons=l8TeacherLessons;
+l8TeacherLessons=function(){l11TeacherLessons();const panel=$('l8TeacherLessons');if(panel)$('dashboard').prepend(panel);l11LessonPicker()};
+function l11LessonPicker(){
+ if(!isTeacher()||!l11Ready()){$('l11LessonPicker')?.remove();return}
+ let panel=$('l11LessonPicker');if(!panel){panel=document.createElement('div');panel.id='l11LessonPicker';panel.className='card l11-lesson-picker';$('students').querySelector('.headline').after(panel)}
+ const open=l8Data.lessons.filter(l=>l.status==='open');panel.innerHTML=`<label for="l11LessonSelect">Punkte für diesen Unterricht</label><select id="l11LessonSelect">${open.length?open.map(l=>`<option value="${l.id}"${l.id===l8Lesson?' selected':''}>${escapeHtml(l8Label(l))}</option>`).join(''):'<option value="">Keine offene Stunde</option>'}</select><button id="l11Overview">Offene Unterrichte</button>${l8Selected()?'<button id="l11CloseLesson">Stunde abschließen</button>':''}`;
+ $('l11LessonSelect').disabled=l8Busy;$('l11LessonSelect').onchange=e=>{if(l8Busy)return;l8Lesson=e.target.value;renderStudents();l11LessonPicker()};$('l11Overview').onclick=()=>showPage('dashboard');if($('l11CloseLesson'))$('l11CloseLesson').onclick=()=>l8LessonStatus(l8Lesson,'closed');
+}
+l9Choose=async function(id,cls){if(l8Busy)return;if(cls!==currentClassId){currentClassId=cls;if(!await loadCurrentClass())return}if(!l11Ready()||!l8Data.lessons.some(l=>l.id===id&&l.status==='open'))return;l8Lesson=id;showPage('students')};
+l8Run=async function(fn,args,key=null){
+ if(l8Busy)return false;if(!l11Ready()||!l11Fresh){l8Status('Bitte die Klassendaten zuerst erfolgreich neu laden.',true);return false}
+ l8Busy=true;document.body.classList.add('l8-saving');$('classSelect').disabled=true;
+ try{
+  if(key){if(!l8Pending.has(key))l8Pending.set(key,crypto.randomUUID());args.p_request=l8Pending.get(key)}
+  const {error}=await l11Timeout(supabaseClient.rpc(fn,args),30000);if(error)throw error;if(key)l8Pending.delete(key);
+  const loaded=await loadCurrentClass();if(!loaded)l8Status('Gespeichert. Anzeige konnte nicht aktualisiert werden. Bitte erneut laden; Vergabe nicht wiederholen.',true);return true;
+ }catch(e){l8Status((e.message||'Speichern fehlgeschlagen.')+' Bei einem Verbindungsabbruch zuerst neu laden und den Verlauf prüfen.',true);return false}
+ finally{l8Busy=false;document.body.classList.remove('l8-saving');$('classSelect').disabled=false;l11LessonPicker()}
+};
+// Navigation and recovery stay available even with an incomplete class load.
+document.addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b||b.closest('.sidebar')||b.id==='l11Overview'||b.id==='l8Refresh'||b.closest('#l8LoadStatus'))return;
+ const independent=['createClassBtn','joinBtn','closeGoalModalBtn','closeShopModalBtn','closeRewardModalBtn','closeAccountModalBtn','closeNewsModalBtn','newsContinueBtn','closeSeasonModalBtn'];
+ if(independent.includes(b.id)||b.classList.contains('restoreBtn'))return;
+ if(b.closest('#shell,.modal-back')&&(!l11Ready()||!l11Fresh)){e.preventDefault();e.stopImmediatePropagation();l8Status('Bitte die Klassendaten zuerst erfolgreich neu laden.',true)}
+},true);
+// A news dialog may never survive a teacher/student or class change.
+const l11RoleUI=setRoleUI;
+setRoleUI=function(){l11RoleUI();document.body.classList.toggle('student-mode',!isTeacher());if(isTeacher())for(const id of ['newsModal','seasonModal'])$(id)?.classList.add('hidden')};
+
+function l11WrapAction(button,msgId){
+ if(!button||button.dataset.l11Guard||typeof button.onclick!=='function')return;button.dataset.l11Guard='1';const action=button.onclick;
+ button.onclick=async function(e){
+  if(l8Busy)return;l8Busy=true;document.body.classList.add('l8-saving');$('classSelect').disabled=true;
+  try{return await action.call(this,e)}catch(err){const message=err?.message||'Vorgang fehlgeschlagen. Bitte Verbindung prüfen.';if(msgId)showMsg(msgId,message);else l8Status(message,true)}
+  finally{l8Busy=false;document.body.classList.remove('l8-saving');$('classSelect').disabled=false;if(['bulkImportBtn','submitShopRequestBtn','saveGoalsBtn'].includes(button.id))button.disabled=false;l11LessonPicker()}
+ };
+}
+for(const [id,msg] of Object.entries({createClassBtn:'createMsg',joinBtn:'joinMsg',bulkImportBtn:'bulkImportMsg',confirmResetPasswordBtn:'accountModalMsg',removeStudentBtn:'accountModalMsg',saveGoalsBtn:'goalModalMsg',saveRewardBtn:'rewardEditMsg',submitShopRequestBtn:'shopModalMsg',challengePlusBtn:'challengeMsg',challengeResetBtn:'challengeMsg',saveChallengeBtn:'challengeMsg',startSeasonBtn:'seasonMsg',rolloverBtn:'rolloverMsg',awardClassPointBtn:null,mobileClassPointBtn:null}))l11WrapAction($(id),msg);
+const l11StudentActions=renderStudents;
+renderStudents=function(){l11StudentActions();document.querySelectorAll('.platinumBtn').forEach(b=>l11WrapAction(b))};
+const l11GoalActions=renderGoalsPage;
+renderGoalsPage=function(){l11GoalActions();document.querySelectorAll('.goal-complete-btn').forEach(b=>l11WrapAction(b))};
+const l11HistoryActions=renderHistory;
+renderHistory=function(){l11HistoryActions();document.querySelectorAll('.undoBtn').forEach(b=>l11WrapAction(b))};
+const l11ShopActions=renderShop;
+renderShop=function(){l11ShopActions();document.querySelectorAll('.shopResolveBtn').forEach(b=>l11WrapAction(b))};
+const l11RewardActions=renderRewards;
+renderRewards=function(){l11RewardActions();document.querySelectorAll('.claimRewardBtn').forEach(b=>l11WrapAction(b))};
+const l11ArchiveActions=renderArchive;
+renderArchive=function(){l11ArchiveActions();document.querySelectorAll('.restoreBtn').forEach(b=>l11WrapAction(b))};
+// Authentication errors must not leave a silently rejected button handler.
+for(const [id,msg] of [['loginBtn','loginMsg'],['changePasswordBtn','passwordMsg']]){
+ const button=$(id),action=button.onclick;button.onclick=async function(e){if(button.disabled)return;button.disabled=true;try{return await action.call(this,e)}catch(err){showMsg(msg,err?.message||'Verbindung fehlgeschlagen. Bitte erneut versuchen.')}finally{button.disabled=false}};
+}
 
 init();
